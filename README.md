@@ -151,23 +151,6 @@ This is a single-file application designed for simplicity and portability. To mo
 
 Open source - feel free to use, modify, and distribute.
 
-## Support
-
-For questions or issues:
-1. Check the built-in help tooltips
-2. Review this README
-3. Examine the code comments in `index.html`
-
-## Roadmap
-
-Potential future enhancements:
-- [ ] HSA/FSA account integration
-- [ ] Provider network considerations
-- [ ] Prescription drug lookup
-- [ ] Multi-year projections
-- [ ] PDF report generation
-- [ ] Mobile app version
-
 ---
 
 **Disclaimer**: This tool provides estimates based on your inputs. Actual healthcare costs may vary. Always consult with insurance providers and healthcare professionals for official cost information.
