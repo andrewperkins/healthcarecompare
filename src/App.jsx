@@ -606,21 +606,19 @@ const HealthInsuranceCalculator = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowSettingsModal(true)}
-                className="flex items-center gap-2 bg-gray-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-700 transition text-xs sm:text-sm"
+                className="flex items-center gap-1 sm:gap-2 bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition text-xs sm:text-sm whitespace-nowrap"
                 title="Configure typical costs for services"
               >
                 <Icon name="settings" size={16} />
-                <span className="hidden xs:inline">Cost Settings</span>
-                <span className="xs:hidden">Settings</span>
+                <span>Cost Settings</span>
               </button>
               <button
                 onClick={handleClearAllData}
-                className="flex items-center gap-2 bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 transition text-xs sm:text-sm"
+                className="flex items-center gap-1 sm:gap-2 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-xs sm:text-sm whitespace-nowrap"
                 title="Clear all data and start over"
               >
                 <Icon name="trash-2" size={16} />
-                <span className="hidden xs:inline">Clear All Data</span>
-                <span className="xs:hidden">Clear</span>
+                <span>Clear All Data</span>
               </button>
             </div>
           </div>
@@ -643,12 +641,12 @@ const HealthInsuranceCalculator = () => {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={exportAllPeople}
-                  className="flex items-center gap-1 sm:gap-2 bg-purple-600 text-white px-2 sm:px-3 py-2 rounded-lg hover:bg-purple-700 transition text-xs sm:text-sm"
+                  className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-1 sm:gap-2 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition text-xs sm:text-sm whitespace-nowrap"
                 >
                   <Icon name="download" size={16} />
-                  <span className="hidden xs:inline">Export All</span>
+                  <span>Export All</span>
                 </button>
-                <div className="relative">
+                <div className="relative flex-grow sm:flex-grow-0">
                   <input
                     type="file"
                     accept=".json"
@@ -658,18 +656,18 @@ const HealthInsuranceCalculator = () => {
                   />
                   <label
                     htmlFor="import-people"
-                    className="flex items-center gap-1 sm:gap-2 bg-blue-600 text-white px-2 sm:px-3 py-2 rounded-lg hover:bg-blue-700 transition text-xs sm:text-sm cursor-pointer"
+                    className="flex items-center justify-center gap-1 sm:gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-xs sm:text-sm cursor-pointer whitespace-nowrap h-full"
                   >
                     <Icon name="upload" size={16} />
-                    <span className="hidden xs:inline">Import</span>
+                    <span>Import</span>
                   </label>
                 </div>
                 <button
                   onClick={addPerson}
-                  className="flex items-center gap-1 sm:gap-2 bg-indigo-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-xs sm:text-sm"
+                  className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-1 sm:gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition text-xs sm:text-sm whitespace-nowrap"
                 >
-                  <Icon name="plus" size={20} />
-                  Add Person
+                  <Icon name="plus" size={16} />
+                  <span>Add Person</span>
                 </button>
               </div>
             </div>
@@ -843,24 +841,23 @@ const HealthInsuranceCalculator = () => {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={toggleScenarios}
-                  className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg transition text-xs sm:text-sm ${
+                  className={`flex-grow sm:flex-grow-0 flex items-center justify-center gap-1 sm:gap-2 px-3 py-2 rounded-lg transition text-xs sm:text-sm whitespace-nowrap ${
                     scenariosEnabled 
                       ? 'bg-orange-600 text-white hover:bg-orange-700' 
                       : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
                   }`}
                 >
                   <Icon name="layers" size={16} />
-                  <span className="hidden xs:inline">{scenariosEnabled ? 'Disable' : 'Enable'} Scenarios</span>
-                  <span className="xs:hidden">{scenariosEnabled ? 'Disable' : 'Enable'}</span>
+                  <span>{scenariosEnabled ? 'Disable' : 'Enable'} Scenarios</span>
                 </button>
                 <button
                   onClick={exportAllPlans}
-                  className="flex items-center gap-1 sm:gap-2 bg-purple-600 text-white px-2 sm:px-3 py-2 rounded-lg hover:bg-purple-700 transition text-xs sm:text-sm"
+                  className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-1 sm:gap-2 bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition text-xs sm:text-sm whitespace-nowrap"
                 >
                   <Icon name="download" size={16} />
-                  <span className="hidden xs:inline">Export All</span>
+                  <span>Export All</span>
                 </button>
-                <div className="relative">
+                <div className="relative flex-grow sm:flex-grow-0">
                   <input
                     type="file"
                     accept=".json"
@@ -870,26 +867,25 @@ const HealthInsuranceCalculator = () => {
                   />
                   <label
                     htmlFor="import-plans"
-                    className="flex items-center gap-1 sm:gap-2 bg-blue-600 text-white px-2 sm:px-3 py-2 rounded-lg hover:bg-blue-700 transition text-xs sm:text-sm cursor-pointer"
+                    className="flex items-center justify-center gap-1 sm:gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-xs sm:text-sm cursor-pointer whitespace-nowrap h-full"
                   >
                     <Icon name="upload" size={16} />
-                    <span className="hidden xs:inline">Import</span>
+                    <span>Import</span>
                   </label>
                 </div>
                 <button
                   onClick={showLLMPrompt}
-                  className="flex items-center gap-1 sm:gap-2 bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition text-xs sm:text-sm"
+                  className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-1 sm:gap-2 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition text-xs sm:text-sm whitespace-nowrap"
                 >
-                  <Icon name="brain" size={18} />
-                  <span className="hidden sm:inline">Add using LLM</span>
-                  <span className="sm:hidden">LLM Import</span>
+                  <Icon name="brain" size={16} />
+                  <span>Add using LLM</span>
                 </button>
                 <button
                   onClick={addPlan}
-                  className="flex items-center gap-1 sm:gap-2 bg-indigo-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-xs sm:text-sm"
+                  className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-1 sm:gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition text-xs sm:text-sm whitespace-nowrap"
                 >
-                  <Icon name="plus" size={20} />
-                  Add Plan
+                  <Icon name="plus" size={16} />
+                  <span>Add Plan</span>
                 </button>
               </div>
             </div>
