@@ -147,11 +147,6 @@ export class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error('Error caught by boundary:', error, errorInfo);
     this.setState({ error, errorInfo });
-    
-    // Optional: Send error to analytics service
-    if (window.plausible) {
-      window.plausible('Error', { props: { message: error.toString() } });
-    }
   }
 
   render() {

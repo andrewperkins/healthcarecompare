@@ -66,7 +66,7 @@ A comprehensive web application for comparing health insurance plans with detail
 - **No Server**: All data stays in your browser
 - **Local Storage Only**: Nothing is transmitted over the internet
 - **Export Control**: You control all data exports
-- **No Tracking**: No analytics or tracking scripts (optional Plausible available)
+- **No Tracking**: No analytics or tracking scripts
 - **GDPR Compliant**: No cookies, no personal data collection
 - **Open Source**: Fully auditable code
 
