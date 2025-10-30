@@ -1,0 +1,32 @@
+{
+  "name": "healthcarecompare",
+  "version": "1.0.0",
+  "description": "A comprehensive web application for comparing health insurance plans with detailed cost calculations. Calculate and compare annual healthcare costs including premiums, copays, medications, and medical visits for your entire family.",
+  "main": ".",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:css && vite build",
+    "preview": "vite preview",
+    "build:css": "npx @tailwindcss/cli -i ./src/pre_tailwind_cli.styles.css -o ./src/styles.css --minify"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrewperkins/healthcarecompare.git"
+  },
+  "author": "Andrew Perkins",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/andrewperkins/healthcarecompare/issues"
+  },
+  "homepage": "https://github.com/andrewperkins/healthcarecompare#readme",
+  "dependencies": {
+    "@tailwindcss/cli": "^4.1.16",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.1.16"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.0",
+    "vite": "^7.1.12"
+  }
+}

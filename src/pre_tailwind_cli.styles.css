@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  /* Custom breakpoint for extra small screens */
+  --breakpoint-xs: 475px;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+/* Mobile-friendly improvements */
+@media (max-width: 640px) {
+    /* Improve touch targets */
+    button, a, input, select, textarea {
+        min-height: 44px;
+    }
+    
+    /* Better scrolling on mobile */
+    * {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Prevent horizontal scroll */
+    body {
+        overflow-x: hidden;
+    }
+}
+
+/* Smooth scrolling for modals */
+.modal-content {
+    scroll-behavior: smooth;
+}
+
+/* Better number input on mobile */
+input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Dark mode transitions */
+* {
+    transition-property: background-color, border-color, color;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+/* Exclude transitions for certain elements */
+button, a, input, select, textarea {
+    transition-property: all;
+}
