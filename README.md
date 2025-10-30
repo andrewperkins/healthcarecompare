@@ -2,28 +2,6 @@
 
 A comprehensive web application for comparing health insurance plans with detailed cost calculations. Calculate and compare annual healthcare costs including premiums, copays, medications, and medical visits for your entire family.
 
-**🌐 [View Deployment Guide](docs/DEPLOYMENT.md)** | **🚀 Ready for Production!**
-
-## 🚀 Quick Start
-
-### Development
-```bash
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-
-# Build Tailwind CSS (if styles change)
-npm run build:css
-```
-
 ## Features
 
 ### 🏥 Family Member Management
