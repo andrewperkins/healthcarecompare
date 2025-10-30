@@ -116,6 +116,15 @@ npm run build:css
 
 We welcome contributions! See **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)** for guidelines.
 
+
+## License
+
+This project is licensed under the **Polyform Noncommercial License 1.0.0**.
+
+You may use, copy, modify, and distribute this software for noncommercial purposes. Commercial use, including selling, offering paid services based on it, or using it within commercial products, is not permitted.
+
+See the [LICENSE](LICENSE) file for the full license text, or visit [https://polyformproject.org/licenses/noncommercial/1.0.0/](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+
 ---
 
 **Disclaimer**: This tool provides estimates based on your inputs. Actual healthcare costs may vary. Always consult with insurance providers and healthcare professionals for official cost information.
