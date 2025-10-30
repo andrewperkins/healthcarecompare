@@ -113,6 +113,8 @@ const HealthInsuranceCalculator = () => {
   const [scenariosEnabled, setScenariosEnabled] = useState(false);
   const [showCalculationModal, setShowCalculationModal] = useState(false);
   const [selectedPlanForCalculation, setSelectedPlanForCalculation] = useState(null);
+  // Track collapsed state for each person's scenarios: { personId: { scenarioKey: boolean } }
+  const [collapsedScenarios, setCollapsedScenarios] = useState({});
   const [scenarios, setScenarios] = useState(() => {
     try {
       const stored = localStorage.getItem('healthcarecompare-scenarios');
@@ -312,19 +314,29 @@ const HealthInsuranceCalculator = () => {
         mostLikely: prev.mostLikely.filter(p => p.id !== id),
         worstCase: prev.worstCase.filter(p => p.id !== id)
       }));
+      
+      // Remove collapsed state for this person
+      setCollapsedScenarios(prev => {
+        const newState = { ...prev };
+        delete newState[id];
+        return newState;
+      });
     }
+  };
+
+  const toggleScenarioCollapse = (personId, scenarioKey) => {
+    setCollapsedScenarios(prev => ({
+      ...prev,
+      [personId]: {
+        ...(prev[personId] || {}),
+        [scenarioKey]: !(prev[personId]?.[scenarioKey] || false)
+      }
+    }));
   };
 
   const updatePersonName = (id, name) => {
     setPeople(people.map(p => p.id === id ? { ...p, name } : p));
     // Note: mostLikely scenario is automatically synced via useEffect
-  };
-
-  const updateScenarioPersonName = (id, name) => {
-    setScenarios(prev => ({
-      ...prev,
-      [activeScenario]: prev[activeScenario].map(p => p.id === id ? { ...p, name } : p)
-    }));
   };
 
   const updatePersonVisits = (id, visitType, value) => {
@@ -342,10 +354,10 @@ const HealthInsuranceCalculator = () => {
     }));
   };
 
-  const updateScenarioPersonVisits = (id, visitType, value) => {
+  const updateScenarioPersonVisits = (id, visitType, value, scenarioKey) => {
     setScenarios(prev => ({
       ...prev,
-      [activeScenario]: prev[activeScenario].map(p => {
+      [scenarioKey]: prev[scenarioKey].map(p => {
         if (p.id === id) {
           return {
             ...p,
@@ -373,10 +385,10 @@ const HealthInsuranceCalculator = () => {
     }));
   };
 
-  const addScenarioMedication = (personId) => {
+  const addScenarioMedication = (personId, scenarioKey) => {
     setScenarios(prev => ({
       ...prev,
-      [activeScenario]: prev[activeScenario].map(p => {
+      [scenarioKey]: prev[scenarioKey].map(p => {
         if (p.id === personId) {
           const newMedId = Math.max(...p.medications.map(m => m.id), 0) + 1;
           return {
@@ -398,10 +410,10 @@ const HealthInsuranceCalculator = () => {
     }));
   };
 
-  const removeScenarioMedication = (personId, medId) => {
+  const removeScenarioMedication = (personId, medId, scenarioKey) => {
     setScenarios(prev => ({
       ...prev,
-      [activeScenario]: prev[activeScenario].map(p => {
+      [scenarioKey]: prev[scenarioKey].map(p => {
         if (p.id === personId) {
           return { ...p, medications: p.medications.filter(m => m.id !== medId) };
         }
@@ -424,10 +436,10 @@ const HealthInsuranceCalculator = () => {
     }));
   };
 
-  const updateScenarioMedication = (personId, medId, field, value) => {
+  const updateScenarioMedication = (personId, medId, field, value, scenarioKey) => {
     setScenarios(prev => ({
       ...prev,
-      [activeScenario]: prev[activeScenario].map(p => {
+      [scenarioKey]: prev[scenarioKey].map(p => {
         if (p.id === personId) {
           return {
             ...p,
@@ -548,14 +560,24 @@ const HealthInsuranceCalculator = () => {
   };
 
   const calculatePlanCost = (plan, scenarioKey = null) => {
-    const scenarioPeople = scenarioKey ? scenarios[scenarioKey] : (scenariosEnabled ? scenarios[activeScenario] : people);
+    // When scenarioKey is provided, use that scenario's data
+    // When scenarios are enabled but no key is provided, use mostLikely scenario
+    // When scenarios are disabled, use people
+    const scenarioPeople = scenarioKey 
+      ? scenarios[scenarioKey] 
+      : (scenariosEnabled ? scenarios.mostLikely : people);
     
     // Use imported calculation function with cost settings
     return calculatePlanCostImpl(plan, scenarioPeople, costSettings);
   };
 
   const getDetailedCostBreakdown = (plan, scenarioKey = null) => {
-    const scenarioPeople = scenarioKey ? scenarios[scenarioKey] : (scenariosEnabled ? scenarios[activeScenario] : people);
+    // When scenarioKey is provided, use that scenario's data
+    // When scenarios are enabled but no key is provided, use mostLikely scenario
+    // When scenarios are disabled, use people
+    const scenarioPeople = scenarioKey 
+      ? scenarios[scenarioKey] 
+      : (scenariosEnabled ? scenarios.mostLikely : people);
     
     // Use imported calculation function with cost settings
     const breakdown = getDetailedCostBreakdownImpl(plan, scenarioPeople, costSettings);
@@ -563,7 +585,7 @@ const HealthInsuranceCalculator = () => {
     // Add scenario name for UI
     return {
       ...breakdown,
-      scenarioName: scenarioKey || (scenariosEnabled ? activeScenario : 'current')
+      scenarioName: scenarioKey || (scenariosEnabled ? 'mostLikely' : 'current')
     };
   };
 
@@ -672,47 +694,23 @@ const HealthInsuranceCalculator = () => {
               </div>
             </div>
             
-            {/* Scenario Selector - only show when scenarios are enabled */}
-            {scenariosEnabled && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-2 transition-colors">
-                <span className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-300">Scenario:</span>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { key: 'bestCase', label: 'Best Case', icon: 'smile', color: 'green' },
-                    { key: 'mostLikely', label: 'Most Likely', icon: 'minus', color: 'blue' },
-                    { key: 'worstCase', label: 'Worst Case', icon: 'frown', color: 'red' }
-                  ].map(scenario => (
-                    <button
-                      key={scenario.key}
-                      onClick={() => setActiveScenario(scenario.key)}
-                      className={`flex items-center gap-1 px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium transition ${
-                        activeScenario === scenario.key
-                          ? `bg-${scenario.color}-600 text-white`
-                          : `text-${scenario.color}-600 hover:bg-${scenario.color}-50`
-                      }`}
-                    >
-                      <Icon name={scenario.icon} size={14} />
-                      {scenario.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+
           </div>
 
           <div className="space-y-4">
-            {(scenariosEnabled ? scenarios[activeScenario] : people).map(person => (
-              <div key={person.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 sm:p-4 bg-white dark:bg-gray-700 transition-colors">
+            {people.map((basePerson, personIndex) => (
+              <div key={basePerson.id} className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 sm:p-4 bg-white dark:bg-gray-700 transition-colors">
                 <div className="flex items-center justify-between mb-3">
                   <input
                     type="text"
-                    value={person.name}
-                    onChange={(e) => (!scenariosEnabled || activeScenario === 'mostLikely') ? updatePersonName(person.id, e.target.value) : updateScenarioPersonName(person.id, e.target.value)}
+                    value={basePerson.name}
+                    onChange={(e) => updatePersonName(basePerson.id, e.target.value)}
                     className="text-base sm:text-lg font-medium border-b border-transparent hover:border-gray-300 dark:hover:border-gray-500 focus:border-indigo-600 dark:focus:border-indigo-400 focus:outline-none px-2 py-1 flex-1 bg-transparent text-gray-800 dark:text-gray-100"
+                    placeholder="Person Name"
                   />
                   <div className="flex gap-1">
                     <button
-                      onClick={() => exportPerson(person)}
+                      onClick={() => exportPerson(basePerson)}
                       className="text-green-600 hover:bg-green-50 p-2 rounded transition"
                       title="Export this person"
                     >
@@ -720,7 +718,7 @@ const HealthInsuranceCalculator = () => {
                     </button>
                     {people.length > 1 && (
                       <button
-                        onClick={() => removePerson(person.id)}
+                        onClick={() => removePerson(basePerson.id)}
                         className="text-red-600 hover:bg-red-50 p-2 rounded transition"
                         title="Remove this person"
                       >
@@ -730,101 +728,222 @@ const HealthInsuranceCalculator = () => {
                   </div>
                 </div>
 
-                {/* Care Visits per Person */}
-                <div className="mb-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon name="activity" size={16} className="text-indigo-600 dark:text-indigo-400" />
-                    <span className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Annual Care Visits</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 ml-0 sm:ml-6">
-                    {Object.keys(person.visits).map(visitType => (
-                      <div key={visitType}>
-                        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1 capitalize">
-                          {visitType.replace(/([A-Z])/g, ' $1').trim()}
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={person.visits[visitType]}
-                          onChange={(e) => (!scenariosEnabled || activeScenario === 'mostLikely') ? updatePersonVisits(person.id, visitType, e.target.value) : updateScenarioPersonVisits(person.id, visitType, e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm focus:ring-2 focus:ring-indigo-600 dark:focus:ring-indigo-400 focus:border-transparent bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                {scenariosEnabled ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    {[
+                      { key: 'mostLikely', label: 'Most Likely', color: 'blue', icon: 'minus' },
+                      { key: 'bestCase', label: 'Best Case', color: 'green', icon: 'smile' },
+                      { key: 'worstCase', label: 'Worst Case', color: 'red', icon: 'frown' }
+                    ].map(scenario => {
+                      const person = scenarios[scenario.key][personIndex];
+                      if (!person) return null;
+                      
+                      const isCollapsed = collapsedScenarios[basePerson.id]?.[scenario.key] || false;
 
-                {/* Medications */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Icon name="pill-half" size={16} className="text-green-600 dark:text-green-400" />
-                      <span className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Medications</span>
-                    </div>
-                    <button
-                      onClick={() => (!scenariosEnabled || activeScenario === 'mostLikely') ? addMedication(person.id) : addScenarioMedication(person.id)}
-                      className="flex items-center gap-1 bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700 transition"
-                    >
-                      <Icon name="plus" size={14} />
-                      Add
-                    </button>
-                  </div>
-
-                  {person.medications.length > 0 && (
-                    <div className="space-y-2 ml-0 sm:ml-6">
-                      {person.medications.map(med => (
-                        <div key={med.id} className="flex flex-col gap-2 bg-gray-50 dark:bg-gray-600 p-2 rounded transition-colors">
-                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder="Medication name"
-                              value={med.name}
-                              onChange={(e) => (!scenariosEnabled || activeScenario === 'mostLikely') ? updateMedication(person.id, med.id, 'name', e.target.value) : updateScenarioMedication(person.id, med.id, 'name', e.target.value)}
-                              className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-500 rounded text-sm min-w-0 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                            />
-                            <div className="flex gap-2">
-                              <select
-                                value={med.tier}
-                                onChange={(e) => (!scenariosEnabled || activeScenario === 'mostLikely') ? updateMedication(person.id, med.id, 'tier', parseInt(e.target.value)) : updateScenarioMedication(person.id, med.id, 'tier', parseInt(e.target.value))}
-                                className="px-2 py-1 border border-gray-300 dark:border-gray-500 rounded text-sm flex-1 sm:flex-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                              >
-                                <option value={1}>Tier 1</option>
-                                <option value={2}>Tier 2</option>
-                                <option value={3}>Tier 3</option>
-                                <option value={4}>Tier 4</option>
-                                <option value={5}>Tier 5</option>
-                              </select>
-                              <input
-                                type="number"
-                                placeholder="Refills/yr"
-                                value={med.refillsPerYear}
-                                onChange={(e) => (!scenariosEnabled || activeScenario === 'mostLikely') ? updateMedication(person.id, med.id, 'refillsPerYear', parseInt(e.target.value) || 0) : updateScenarioMedication(person.id, med.id, 'refillsPerYear', parseInt(e.target.value) || 0)}
-                                className="w-20 sm:w-20 px-2 py-1 border border-gray-300 dark:border-gray-500 rounded text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                              />
-                              <button
-                                onClick={() => (!scenariosEnabled || activeScenario === 'mostLikely') ? removeMedication(person.id, med.id) : removeScenarioMedication(person.id, med.id)}
-                                className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 p-1 rounded transition flex-shrink-0"
-                              >
-                                <Icon name="trash-2" size={16} />
-                              </button>
+                      return (
+                        <div key={scenario.key} className={`border-2 border-${scenario.color}-200 dark:border-${scenario.color}-700 rounded-lg p-3 bg-${scenario.color}-50 dark:bg-gray-800`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <Icon name={scenario.icon} size={16} className={`text-${scenario.color}-600`} />
+                              <h3 className={`text-sm font-semibold text-${scenario.color}-800 dark:text-${scenario.color}-300`}>{scenario.label}</h3>
                             </div>
+                            <button
+                              onClick={() => toggleScenarioCollapse(basePerson.id, scenario.key)}
+                              className={`text-${scenario.color}-600 dark:text-${scenario.color}-400 hover:bg-${scenario.color}-100 dark:hover:bg-gray-700 p-1 rounded transition`}
+                              title={isCollapsed ? 'Expand' : 'Collapse'}
+                            >
+                              <Icon name={isCollapsed ? 'chevron-down' : 'chevron-up'} size={16} />
+                            </button>
                           </div>
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                            <label className="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">Custom Cost per Refill ($):</label>
+                          
+                          {!isCollapsed && (
+                            <>
+                              {/* Care Visits */}
+                              <div className="mb-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Icon name="activity" size={14} className="text-indigo-600 dark:text-indigo-400" />
+                                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Annual Care Visits</span>
+                                </div>
+                                <div className="space-y-2">
+                                  {Object.keys(person.visits).map(visitType => (
+                                    <div key={visitType}>
+                                      <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1 capitalize">
+                                        {formatVisitType(visitType)}
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={person.visits[visitType]}
+                                        onChange={(e) => updateScenarioPersonVisits(person.id, visitType, e.target.value, scenario.key)}
+                                        className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs focus:ring-2 focus:ring-indigo-600 dark:focus:ring-indigo-400 focus:border-transparent bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Medications */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <Icon name="pill-half" size={14} className="text-green-600 dark:text-green-400" />
+                                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Medications</span>
+                                  </div>
+                                  <button
+                                    onClick={() => addScenarioMedication(person.id, scenario.key)}
+                                    className="flex items-center gap-1 bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700 transition"
+                                  >
+                                    <Icon name="plus" size={12} />
+                                    Add
+                                  </button>
+                                </div>
+                                {person.medications.length > 0 && (
+                                  <div className="space-y-2">
+                                    {person.medications.map(med => (
+                                      <div key={med.id} className="bg-white dark:bg-gray-600 p-2 rounded">
+                                        <input
+                                          type="text"
+                                          placeholder="Med name"
+                                          value={med.name}
+                                          onChange={(e) => updateScenarioMedication(person.id, med.id, 'name', e.target.value, scenario.key)}
+                                          className="w-full mb-1 px-2 py-1 border border-gray-300 dark:border-gray-500 rounded text-xs bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                        />
+                                        <div className="flex gap-2 items-center">
+                                          <select
+                                            value={med.tier}
+                                            onChange={(e) => updateScenarioMedication(person.id, med.id, 'tier', parseInt(e.target.value), scenario.key)}
+                                            className="flex-1 px-1 py-1 border border-gray-300 dark:border-gray-500 rounded text-xs bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                          >
+                                            <option value={1}>T1</option>
+                                            <option value={2}>T2</option>
+                                            <option value={3}>T3</option>
+                                            <option value={4}>T4</option>
+                                            <option value={5}>T5</option>
+                                          </select>
+                                          <input
+                                            type="number"
+                                            placeholder="Refills"
+                                            value={med.refillsPerYear}
+                                            onChange={(e) => updateScenarioMedication(person.id, med.id, 'refillsPerYear', parseInt(e.target.value) || 0, scenario.key)}
+                                            className="w-14 px-1 py-1 border border-gray-300 dark:border-gray-500 rounded text-xs bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                          />
+                                          <button
+                                            onClick={() => removeScenarioMedication(person.id, med.id, scenario.key)}
+                                            className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 p-1 rounded"
+                                          >
+                                            <Icon name="trash-2" size={14} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <>
+                    {/* Care Visits per Person */}
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon name="activity" size={16} className="text-indigo-600 dark:text-indigo-400" />
+                        <span className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Annual Care Visits</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 ml-0 sm:ml-6">
+                        {Object.keys(basePerson.visits).map(visitType => (
+                          <div key={visitType}>
+                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1 capitalize">
+                              {formatVisitType(visitType)}
+                            </label>
                             <input
                               type="number"
-                              step="0.01"
-                              placeholder="Optional - leave blank to use plan tier"
-                              value={med.customCost || ''}
-                              onChange={(e) => (!scenariosEnabled || activeScenario === 'mostLikely') ? updateMedication(person.id, med.id, 'customCost', e.target.value) : updateScenarioMedication(person.id, med.id, 'customCost', e.target.value)}
-                              className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-500 rounded text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                              min="0"
+                              value={basePerson.visits[visitType]}
+                              onChange={(e) => updatePersonVisits(basePerson.id, visitType, e.target.value)}
+                              className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm focus:ring-2 focus:ring-indigo-600 dark:focus:ring-indigo-400 focus:border-transparent bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
                             />
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  )}
-                </div>
+
+                    {/* Medications */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Icon name="pill-half" size={16} className="text-green-600 dark:text-green-400" />
+                          <span className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300">Medications</span>
+                        </div>
+                        <button
+                          onClick={() => addMedication(basePerson.id)}
+                          className="flex items-center gap-1 bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700 transition"
+                        >
+                          <Icon name="plus" size={14} />
+                          Add
+                        </button>
+                      </div>
+
+                      {basePerson.medications.length > 0 && (
+                        <div className="space-y-2 ml-0 sm:ml-6">
+                          {basePerson.medications.map(med => (
+                            <div key={med.id} className="flex flex-col gap-2 bg-gray-50 dark:bg-gray-600 p-2 rounded transition-colors">
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Medication name"
+                                  value={med.name}
+                                  onChange={(e) => updateMedication(basePerson.id, med.id, 'name', e.target.value)}
+                                  className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-500 rounded text-sm min-w-0 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                />
+                                <div className="flex gap-2">
+                                  <select
+                                    value={med.tier}
+                                    onChange={(e) => updateMedication(basePerson.id, med.id, 'tier', parseInt(e.target.value))}
+                                    className="px-2 py-1 border border-gray-300 dark:border-gray-500 rounded text-sm flex-1 sm:flex-none bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                  >
+                                    <option value={1}>Tier 1</option>
+                                    <option value={2}>Tier 2</option>
+                                    <option value={3}>Tier 3</option>
+                                    <option value={4}>Tier 4</option>
+                                    <option value={5}>Tier 5</option>
+                                  </select>
+                                  <input
+                                    type="number"
+                                    placeholder="Refills/yr"
+                                    value={med.refillsPerYear}
+                                    onChange={(e) => updateMedication(basePerson.id, med.id, 'refillsPerYear', parseInt(e.target.value) || 0)}
+                                    className="w-20 sm:w-20 px-2 py-1 border border-gray-300 dark:border-gray-500 rounded text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                  />
+                                  <button
+                                    onClick={() => removeMedication(basePerson.id, med.id)}
+                                    className="text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 p-1 rounded transition flex-shrink-0"
+                                  >
+                                    <Icon name="trash-2" size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                <label className="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">Custom Cost per Refill ($):</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Optional - leave blank to use plan tier"
+                                  value={med.customCost || ''}
+                                  onChange={(e) => updateMedication(basePerson.id, med.id, 'customCost', e.target.value)}
+                                  className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-500 rounded text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -1155,90 +1274,68 @@ const HealthInsuranceCalculator = () => {
                           <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">Annual Premium</h4>
                           <div className="bg-gray-50 p-2 sm:p-3 rounded">
                             <p className="text-xs sm:text-sm text-gray-600">
-                              {formatCurrency(breakdown.premiumBreakdown.monthlyPremium)}/month × {breakdown.premiumBreakdown.monthsPerYear} months = 
-                              <span className="font-semibold"> {formatCurrency(breakdown.premiumBreakdown.annualPremium)}</span>
+                              {formatCurrency(breakdown.premiumBreakdown?.monthlyPremium || 0)}/month × {breakdown.premiumBreakdown?.monthsPerYear || 12} months = 
+                              <span className="font-semibold"> {formatCurrency(breakdown.premiumBreakdown?.annualPremium || 0)}</span>
                             </p>
                           </div>
                         </div>
 
                         {/* Medical Visits Section */}
                         <div className="mb-6">
-                          <h4 className="font-semibold text-gray-800 mb-2">Medical Visits</h4>
-                          {breakdown.visitBreakdown.map((person, idx) => (
+                          <h4 className="font-semibold text-gray-800 mb-2">Medical Visits & Costs</h4>
+                          {breakdown.personBreakdowns && breakdown.personBreakdowns.map((person, idx) => (
                             <div key={idx} className="mb-4 bg-gray-50 p-3 rounded">
                               <h5 className="font-medium text-gray-700 mb-2">{person.personName}</h5>
                               <div className="space-y-1 text-sm">
-                                {Object.entries(person.visitCosts).map(([visitType, cost]) => 
-                                  cost.visits > 0 && (
-                                    <div key={visitType} className="flex justify-between">
-                                      <span className="capitalize">{visitType.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                                      <span>{cost.calculation}</span>
-                                    </div>
-                                  )
-                                )}
+                                {person.chargeDetails?.exempt?.map((item, i) => (
+                                  <div key={i} className="flex justify-between">
+                                    <span>{item.name}:</span>
+                                    <span>{item.calculation} = {formatCurrency(item.cost)}</span>
+                                  </div>
+                                ))}
+                                {person.chargeDetails?.deductible?.map((item, i) => (
+                                  <div key={i} className="flex justify-between">
+                                    <span>{item.name}:</span>
+                                    <span>{item.calculation} = {formatCurrency(item.cost)}</span>
+                                  </div>
+                                ))}
                                 <div className="border-t pt-1 flex justify-between font-medium">
-                                  <span>Person Total:</span>
-                                  <span>{formatCurrency(person.personTotal)}</span>
+                                  <span>Person Total OOP:</span>
+                                  <span>{formatCurrency(person.totalOOP)}</span>
                                 </div>
                               </div>
                             </div>
                           ))}
                           <div className="bg-blue-50 p-2 rounded">
                             <div className="flex justify-between font-semibold">
-                              <span>Total Medical Visits:</span>
-                              <span>{formatCurrency(breakdown.totalVisitCosts)}</span>
+                              <span>Total Family OOP (before MOOP):</span>
+                              <span>{formatCurrency(breakdown.familyOOPTotal || 0)}</span>
+                            </div>
+                            <div className="flex justify-between font-semibold">
+                              <span>Final Family OOP (after MOOP cap):</span>
+                              <span>{formatCurrency(breakdown.finalFamilyOOP || 0)}</span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Medications Section */}
-                        {breakdown.medicationBreakdown.length > 0 && (
-                          <div className="mb-6">
-                            <h4 className="font-semibold text-gray-800 mb-2">Medications</h4>
-                            {breakdown.medicationBreakdown.map((person, idx) => (
-                              <div key={idx} className="mb-4 bg-gray-50 p-3 rounded">
-                                <h5 className="font-medium text-gray-700 mb-2">{person.personName}</h5>
-                                <div className="space-y-1 text-sm">
-                                  {person.medications.map((med, medIdx) => (
-                                    <div key={medIdx} className="flex justify-between">
-                                      <span>{med.medicationName} (Tier {med.tier}):</span>
-                                      <span>{med.calculation}</span>
-                                    </div>
-                                  ))}
-                                  <div className="border-t pt-1 flex justify-between font-medium">
-                                    <span>Person Total:</span>
-                                    <span>{formatCurrency(person.personTotal)}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                            <div className="bg-green-50 p-2 rounded">
-                              <div className="flex justify-between font-semibold">
-                                <span>Total Medications:</span>
-                                <span>{formatCurrency(breakdown.totalRxCosts)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                        {/* Remove old medications section since it's now integrated above */}
+
+                        {/* Remove old medications section since it's now integrated above */}
 
                         {/* Grand Total */}
                         <div className={`bg-${scenario.color}-100 p-4 rounded-lg border-2 border-${scenario.color}-300`}>
                           <div className="space-y-2">
                             <div className="flex justify-between">
                               <span>Annual Premium:</span>
-                              <span>{formatCurrency(breakdown.premiumBreakdown.annualPremium)}</span>
+                              <span>{formatCurrency(breakdown.premiumBreakdown?.annualPremium || 0)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span>Medical Visits:</span>
-                              <span>{formatCurrency(breakdown.totalVisitCosts)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Medications:</span>
-                              <span>{formatCurrency(breakdown.totalRxCosts)}</span>
+                              <span>Total Out-of-Pocket:</span>
+                              <span>{formatCurrency(breakdown.finalFamilyOOP || 0)}</span>
                             </div>
                             <div className="border-t-2 border-gray-400 pt-2 flex justify-between font-bold text-lg">
                               <span>Grand Total:</span>
-                              <span>{formatCurrency(breakdown.grandTotal)}</span>
+                              <span>{formatCurrency(breakdown.grandTotal || 0)}</span>
                             </div>
                           </div>
                         </div>
