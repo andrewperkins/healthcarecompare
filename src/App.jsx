@@ -1094,22 +1094,18 @@ const HealthInsuranceCalculator = () => {
                     </div>
                   ) : (
                     // Show single cost when scenarios disabled
-                    <div className="space-y-3 bg-indigo-50 p-4 rounded-lg">
+                    <div className="space-y-3 bg-indigo-50 dark:bg-gray-800 p-4 rounded-lg">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Annual Premium</span>
-                        <span className="font-semibold">{formatCurrency(costs.premium)}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Annual Premium</span>
+                        <span className="font-semibold dark:text-gray-200">{formatCurrency(costs.premium)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Medical Visits</span>
-                        <span className="font-semibold">{formatCurrency(costs.visits)}</span>
+                        <span className="text-gray-600 dark:text-gray-400">Out-of-Pocket Costs</span>
+                        <span className="font-semibold dark:text-gray-200">{formatCurrency(costs.visits)}</span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Medications</span>
-                        <span className="font-semibold">{formatCurrency(costs.medications)}</span>
-                      </div>
-                      <div className="border-t-2 border-indigo-300 pt-2 flex justify-between">
-                        <span className="font-bold text-gray-800">Total Yearly Cost</span>
-                        <span className="font-bold text-2xl text-indigo-600">{formatCurrency(costs.total)}</span>
+                      <div className="border-t-2 border-indigo-300 dark:border-indigo-600 pt-2 flex justify-between">
+                        <span className="font-bold text-gray-800 dark:text-gray-100">Total Yearly Cost</span>
+                        <span className="font-bold text-2xl text-indigo-600 dark:text-indigo-400">{formatCurrency(costs.total)}</span>
                       </div>
                     </div>
                   )}
@@ -1258,93 +1254,139 @@ const HealthInsuranceCalculator = () => {
                     <div>
                       {/* Premium Section */}
                       <div className="mb-6">
-                        <h4 className="font-semibold text-gray-800 mb-2">Annual Premium</h4>
-                        <div className="bg-gray-50 p-3 rounded">
-                          <p className="text-sm text-gray-600">
+                        <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Annual Premium</h4>
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded">
+                          <p className="text-sm text-gray-600 dark:text-gray-300">
                             {formatCurrency(breakdown.premiumBreakdown.monthlyPremium)}/month × {breakdown.premiumBreakdown.monthsPerYear} months = 
                             <span className="font-semibold"> {formatCurrency(breakdown.premiumBreakdown.annualPremium)}</span>
                           </p>
                         </div>
                       </div>
 
-                      {/* Medical Visits Section */}
+                      {/* OOP Calculation Section */}
                       <div className="mb-6">
-                        <h4 className="font-semibold text-gray-800 mb-2">Medical Visits</h4>
-                        {breakdown.visitBreakdown.map((person, idx) => (
-                          <div key={idx} className="mb-4 bg-gray-50 p-3 rounded">
-                            <h5 className="font-medium text-gray-700 mb-2">{person.personName}</h5>
-                            <div className="space-y-1 text-sm">
-                              {Object.entries(person.visitCosts).map(([visitType, cost]) => 
-                                cost.visits > 0 && (
-                                  <div key={visitType} className="flex justify-between">
-                                    <span className="capitalize">{visitType.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                                    <span>{cost.calculation}</span>
+                        <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Out-of-Pocket Cost Calculation</h4>
+
+                        {/* Per-Person Breakdown */}
+                        <div className="mb-4 space-y-4">
+                          <p className="text-sm text-gray-800 dark:text-gray-300 font-medium">Per-Person Cost Details</p>
+                          {breakdown.personBreakdowns.map((person, index) => (
+                            <div key={index} className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600">
+                              <h5 className="font-semibold text-gray-700 dark:text-gray-200 mb-2">{person.personName}</h5>
+                              
+                              {/* Exempt Copays for Person */}
+                              {person.exemptCopays.length > 0 && (
+                                <div className="mb-2">
+                                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Exempt Copays (Not subject to deductible)</p>
+                                  <div className="pl-4 text-xs space-y-1 mt-1">
+                                    {person.exemptCopays.map((item, i) => (
+                                      <div key={i} className="flex justify-between">
+                                        <span className="text-gray-500 dark:text-gray-300 capitalize">{item.type}: {item.calculation}</span>
+                                        <span className="font-medium">{formatCurrency(item.cost)}</span>
+                                      </div>
+                                    ))}
+                                    <div className="flex justify-between font-semibold border-t border-gray-200 dark:border-gray-500 pt-1">
+                                      <span className="text-gray-700 dark:text-gray-200">Total Exempt Copays</span>
+                                      <span>{formatCurrency(person.totalExemptCopays)}</span>
+                                    </div>
                                   </div>
-                                )
+                                </div>
                               )}
-                              <div className="border-t pt-1 flex justify-between font-medium">
-                                <span>Person Total:</span>
-                                <span>{formatCurrency(person.personTotal)}</span>
-                              </div>
+
+                              {/* Deductible Applicable Charges for Person */}
+                              {person.deductibleApplicableCharges.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Deductible Applicable Charges</p>
+                                  <div className="pl-4 text-xs space-y-1 mt-1">
+                                    {person.deductibleApplicableCharges.map((item, i) => (
+                                      <div key={i} className="flex justify-between">
+                                        <span className="text-gray-500 dark:text-gray-300 capitalize">{item.type}: {item.calculation}</span>
+                                        <span className="font-medium">{formatCurrency(item.charge)}</span>
+                                      </div>
+                                    ))}
+                                    <div className="flex justify-between font-semibold border-t border-gray-200 dark:border-gray-500 pt-1">
+                                      <span className="text-gray-700 dark:text-gray-200">Total Deductible Charges</span>
+                                      <span>{formatCurrency(person.totalDeductibleApplicableCharges)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
-                        <div className="bg-blue-50 p-2 rounded">
-                          <div className="flex justify-between font-semibold">
-                            <span>Total Medical Visits:</span>
-                            <span>{formatCurrency(breakdown.totalVisitCosts)}</span>
-                          </div>
+                          ))}
+                        </div>
+                        
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded space-y-2">
+                            <p className="text-sm text-gray-800 dark:text-gray-300 font-medium">Step A: Cost from Deductible-Applicable Charges (Family Total)</p>
+                            <div className="flex justify-between text-sm pl-4">
+                                <span className="text-gray-600 dark:text-gray-400">Total Deductible Applicable Charges:</span>
+                                <span>{formatCurrency(breakdown.deductibleBreakdown.totalDeductibleApplicableCharges)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm pl-4">
+                                <span className="text-gray-600 dark:text-gray-400">Plan Deductible:</span>
+                                <span>- {formatCurrency(breakdown.deductibleBreakdown.medicalDeductible)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm pl-4 border-t border-gray-200 dark:border-gray-600 pt-1">
+                                <span className="text-gray-600 dark:text-gray-400">Amount Paid to Deductible:</span>
+                                <span>{formatCurrency(breakdown.deductibleBreakdown.medicalDeductiblePaid)}</span>
+                            </div>
+                             <div className="flex justify-between text-sm pl-4">
+                                <span className="text-gray-600 dark:text-gray-400">Charges After Deductible × Coinsurance ({breakdown.coinsuranceBreakdown.coinsuranceRate * 100}%):</span>
+                                <span>+ {formatCurrency(breakdown.coinsuranceBreakdown.totalCoinsurancePaid)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm pl-4 font-semibold border-t border-gray-200 dark:border-gray-600 pt-1">
+                                <span className="text-gray-800 dark:text-gray-200">Deductible-Based Cost:</span>
+                                <span>{formatCurrency(breakdown.deductibleBreakdown.deductibleBasedCost)}</span>
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded space-y-2 mt-2">
+                            <p className="text-sm text-gray-800 dark:text-gray-300 font-medium">Step B: Total OOP (Before MOOP)</p>
+                             <div className="flex justify-between text-sm pl-4">
+                                <span className="text-gray-600 dark:text-gray-400">Deductible-Based Cost:</span>
+                                <span>{formatCurrency(breakdown.deductibleBreakdown.deductibleBasedCost)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm pl-4">
+                                <span className="text-gray-600 dark:text-gray-400">Total Estimated Exempt Copays (Family Total):</span>
+                                <span>+ {formatCurrency(breakdown.oopBreakdown.totalEstimatedExemptCopays)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm pl-4 font-semibold border-t border-gray-200 dark:border-gray-600 pt-1">
+                                <span className="text-gray-800 dark:text-gray-200">Calculated OOP:</span>
+                                <span>{formatCurrency(breakdown.oopBreakdown.calculatedOOP)}</span>
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded space-y-2 mt-2">
+                            <p className="text-sm text-gray-800 dark:text-gray-300 font-medium">Step C: Apply MOOP Ceiling</p>
+                             <div className="flex justify-between text-sm pl-4">
+                                <span className="text-gray-600 dark:text-gray-400">Calculated OOP:</span>
+                                <span>{formatCurrency(breakdown.oopBreakdown.calculatedOOP)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm pl-4">
+                                <span className="text-gray-600 dark:text-gray-400">Plan Max-Out-of-Pocket (MOOP):</span>
+                                <span>{formatCurrency(breakdown.oopBreakdown.planMOOP)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm pl-4 font-semibold border-t border-gray-200 dark:border-gray-600 pt-1">
+                                <span className="text-gray-800 dark:text-gray-200">Total Estimated OOP (lesser of the two):</span>
+                                <span className="text-green-600 dark:text-green-400">{formatCurrency(breakdown.oopBreakdown.totalEstimatedOOP)}</span>
+                            </div>
                         </div>
                       </div>
 
-                      {/* Medications Section */}
-                      {breakdown.medicationBreakdown.length > 0 && (
-                        <div className="mb-6">
-                          <h4 className="font-semibold text-gray-800 mb-2">Medications</h4>
-                          {breakdown.medicationBreakdown.map((person, idx) => (
-                            <div key={idx} className="mb-4 bg-gray-50 p-3 rounded">
-                              <h5 className="font-medium text-gray-700 mb-2">{person.personName}</h5>
-                              <div className="space-y-1 text-sm">
-                                {person.medications.map((med, medIdx) => (
-                                  <div key={medIdx} className="flex justify-between">
-                                    <span>{med.medicationName} (Tier {med.tier}):</span>
-                                    <span>{med.calculation}</span>
-                                  </div>
-                                ))}
-                                <div className="border-t pt-1 flex justify-between font-medium">
-                                  <span>Person Total:</span>
-                                  <span>{formatCurrency(person.personTotal)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          <div className="bg-green-50 p-2 rounded">
-                            <div className="flex justify-between font-semibold">
-                              <span>Total Medications:</span>
-                              <span>{formatCurrency(breakdown.totalRxCosts)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
                       {/* Grand Total */}
-                      <div className="bg-indigo-100 p-4 rounded-lg border-2 border-indigo-300">
+                      <div className="bg-indigo-100 dark:bg-indigo-900 p-4 rounded-lg border-2 border-indigo-300 dark:border-indigo-700">
                         <div className="space-y-2">
                           <div className="flex justify-between">
-                            <span>Annual Premium:</span>
-                            <span>{formatCurrency(breakdown.premiumBreakdown.annualPremium)}</span>
+                            <span className="dark:text-gray-200">Annual Premium:</span>
+                            <span className="dark:text-gray-200">{formatCurrency(breakdown.premiumBreakdown.annualPremium)}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span>Medical Visits:</span>
-                            <span>{formatCurrency(breakdown.totalVisitCosts)}</span>
+                            <span className="dark:text-gray-200">Total Estimated Out-of-Pocket:</span>
+                            <span className="dark:text-gray-200">{formatCurrency(breakdown.oopBreakdown.totalEstimatedOOP)}</span>
                           </div>
-                          <div className="flex justify-between">
-                            <span>Medications:</span>
-                            <span>{formatCurrency(breakdown.totalRxCosts)}</span>
-                          </div>
-                          <div className="border-t-2 border-gray-400 pt-2 flex justify-between font-bold text-lg">
-                            <span>Grand Total:</span>
-                            <span>{formatCurrency(breakdown.grandTotal)}</span>
+                          <div className="border-t-2 border-gray-400 dark:border-gray-500 pt-2 flex justify-between font-bold text-lg">
+                            <span className="dark:text-gray-100">Grand Total:</span>
+                            <span className="dark:text-gray-100">{formatCurrency(breakdown.grandTotal)}</span>
                           </div>
                         </div>
                       </div>
@@ -1354,18 +1396,14 @@ const HealthInsuranceCalculator = () => {
               )}
               
               {/* Calculation Notes */}
-              <div className="mt-4 sm:mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
-                <h4 className="font-semibold text-yellow-800 mb-2 text-sm sm:text-base">Calculation Notes & Assumptions:</h4>
-                <ul className="text-xs sm:text-sm text-yellow-700 space-y-1">
-                  <li>• <strong>Premium:</strong> Monthly premium × 12 months</li>
-                  <li>• <strong>Copays:</strong> Number of visits × copay amount</li>
-                  <li>• <strong>Coinsurance:</strong> Number of services × estimated cost × coinsurance percentage</li>
-                  <li>• <strong>Imaging:</strong> Assumes $200 base cost per imaging service</li>
-                  <li>• <strong>Medications (Custom Cost):</strong> Refills × your provided cost per refill</li>
-                  <li>• <strong>Medications Tier 1-2:</strong> Refills × copay amount (when no custom cost provided)</li>
-                  <li>• <strong>Medications Tier 3-5:</strong> Refills × ($50 estimated cost × coinsurance percentage) (when no custom cost provided)</li>
-                  <li>• <strong>Deductibles:</strong> Not included in calculations (plan details show deductible amounts)</li>
-                  <li>• <strong>Out-of-pocket maximums:</strong> Not applied to calculations (plan details show OOP max)</li>
+              <div className="mt-4 sm:mt-8 bg-yellow-50 dark:bg-yellow-800 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 sm:p-4">
+                <h4 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-2 text-sm sm:text-base">Calculation Notes & Assumptions:</h4>
+                <ul className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+                  <li>• This calculation follows the formula provided, applying the plan's deductible and MOOP.</li>
+                  <li>• <strong>Exempt Copays:</strong> Costs for services like primary care, specialist visits, etc., that are not subject to the deductible.</li>
+                  <li>• <strong>Deductible Applicable Charges:</strong> Full cost of services like ER, imaging, and certain medications before insurance discounts.</li>
+                  <li>• <strong>Coinsurance Rate:</strong> A single coinsurance rate is assumed for simplicity. The actual rate may vary by service.</li>
+                  <li>• <strong>Medications:</strong> Medications with a flat copay are treated as 'exempt'. Medications with coinsurance or a custom cost are treated as 'deductible applicable'. An estimated cost of $100 is used for coinsurance-based drugs if no custom cost is provided.</li>
                 </ul>
               </div>
             </div>

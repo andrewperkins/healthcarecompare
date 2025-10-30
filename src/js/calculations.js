@@ -3,59 +3,7 @@
  * All healthcare plan cost calculations and breakdowns
  */
 
-/**
- * Determine if a service uses coinsurance (returns percentage) or copay (returns fixed amount)
- * @param {Object} plan - The insurance plan
- * @param {string} visitType - Type of visit
- * @returns {Object} { isCoinsurance: boolean, rate: number }
- */
-function getServiceCostType(plan, visitType) {
-  const copay = plan.copays[visitType];
-  
-  // If copay is between 0 and 1, it's a coinsurance percentage
-  // Otherwise it's a fixed copay amount
-  if (copay > 0 && copay < 1) {
-    return { isCoinsurance: true, rate: copay };
-  }
-  return { isCoinsurance: false, rate: copay };
-}
 
-/**
- * Calculate cost for a service that may use deductible and coinsurance
- * @param {number} totalCost - Total cost of the service
- * @param {number} deductibleRemaining - How much deductible is left
- * @param {number} coinsuranceRate - Coinsurance percentage (0-1)
- * @param {boolean} isCoinsurance - Whether this service uses coinsurance
- * @returns {Object} { patientPays, deductibleUsed, coinsuranceAmount }
- */
-function calculateServiceCost(totalCost, deductibleRemaining, coinsuranceRate, isCoinsurance) {
-  if (!isCoinsurance) {
-    // Fixed copay - no deductible applies
-    return {
-      patientPays: coinsuranceRate, // In this case it's actually the copay amount
-      deductibleUsed: 0,
-      coinsuranceAmount: 0
-    };
-  }
-  
-  // Service uses coinsurance - deductible applies first
-  let deductibleUsed = 0;
-  let coinsuranceAmount = 0;
-  
-  if (deductibleRemaining > 0) {
-    deductibleUsed = Math.min(totalCost, deductibleRemaining);
-    const afterDeductible = totalCost - deductibleUsed;
-    coinsuranceAmount = afterDeductible * coinsuranceRate;
-  } else {
-    coinsuranceAmount = totalCost * coinsuranceRate;
-  }
-  
-  return {
-    patientPays: deductibleUsed + coinsuranceAmount,
-    deductibleUsed,
-    coinsuranceAmount
-  };
-}
 
 /**
  * Calculate total annual cost for a plan
@@ -65,44 +13,32 @@ function calculateServiceCost(totalCost, deductibleRemaining, coinsuranceRate, i
  * @returns {Object} Breakdown of costs (premium, visits, medications, total, deductible, coinsurance)
  */
 export function calculatePlanCost(plan, people, costSettings = null) {
-  // Use default costs if not provided
   const costs = costSettings || {
     emergencyRoom: 1500,
     diagnosticTest: 300,
     imaging: 200,
     rehabilitationOutpatient: 150,
-    habilitationOutpatient: 150
+    habilitationOutpatient: 150,
   };
 
-  // Annual premium
-  const premiumCost = plan.premium * 12;
+  const annualPremium = plan.premium * 12;
 
-  // Use family deductible if more than one person
-  const medicalDeductible = people.length > 1 
-    ? plan.medicalDeductible.family 
-    : plan.medicalDeductible.person;
-  const rxDeductible = people.length > 1 
-    ? plan.rxDeductible.family 
-    : plan.rxDeductible.person;
+  const planDeductible = people.length > 1 ? plan.medicalDeductible.family : plan.medicalDeductible.person;
+  const planMOOP = people.length > 1 ? plan.outOfPocketMax.family : plan.outOfPocketMax.person;
 
-  let medicalDeductibleRemaining = medicalDeductible;
-  let rxDeductibleRemaining = rxDeductible;
-  let totalDeductiblePaid = 0;
-  let totalCoinsurancePaid = 0;
+  let totalEstimatedExemptCopays = 0;
+  let totalDeductibleApplicableCharges = 0;
+  let coinsuranceRate = 0; // Assuming a single rate for simplicity, may need adjustment
 
-  // Medical visits - sum across all people
-  let visitCosts = 0;
-  
   people.forEach(person => {
-    // Services that typically use fixed copays
-    visitCosts += 
-      (person.visits.primaryCare * plan.copays.primaryCare) +
-      (person.visits.specialist * plan.copays.specialist) +
-      (person.visits.urgentCare * plan.copays.urgentCare) +
-      (person.visits.mentalHealth * plan.copays.mentalHealth);
+    // Estimate exempt copays (services not subject to deductible)
+    totalEstimatedExemptCopays += (person.visits.primaryCare * plan.copays.primaryCare);
+    totalEstimatedExemptCopays += (person.visits.specialist * plan.copays.specialist);
+    totalEstimatedExemptCopays += (person.visits.urgentCare * plan.copays.urgentCare);
+    totalEstimatedExemptCopays += (person.visits.mentalHealth * plan.copays.mentalHealth);
 
-    // Services that may use coinsurance - need to check and apply deductible
-    const coinsuranceServices = [
+    // Sum up charges for services that are subject to the deductible
+    const deductibleServices = [
       { type: 'emergencyRoom', visits: person.visits.emergencyRoom, cost: costs.emergencyRoom },
       { type: 'diagnosticTest', visits: person.visits.diagnosticTest, cost: costs.diagnosticTest },
       { type: 'imaging', visits: person.visits.imaging, cost: costs.imaging },
@@ -110,55 +46,60 @@ export function calculatePlanCost(plan, people, costSettings = null) {
       { type: 'habilitationOutpatient', visits: person.visits.habilitationOutpatient, cost: costs.habilitationOutpatient }
     ];
 
-    coinsuranceServices.forEach(service => {
+    deductibleServices.forEach(service => {
       if (service.visits > 0) {
-        const totalServiceCost = service.visits * service.cost;
-        const costType = getServiceCostType(plan, service.type);
-        const result = calculateServiceCost(
-          totalServiceCost,
-          medicalDeductibleRemaining,
-          costType.rate,
-          costType.isCoinsurance
-        );
-        
-        visitCosts += result.patientPays;
-        totalDeductiblePaid += result.deductibleUsed;
-        totalCoinsurancePaid += result.coinsuranceAmount;
-        medicalDeductibleRemaining -= result.deductibleUsed;
+        totalDeductibleApplicableCharges += service.visits * service.cost;
+        // This is a simplification. Coinsurance can vary by service.
+        // Using the first one found for now.
+        if (plan.copays[service.type] > 0 && plan.copays[service.type] < 1) {
+            coinsuranceRate = plan.copays[service.type];
+        }
       }
     });
-  });
 
-  // Medications
-  let rxCost = 0;
-  people.forEach(person => {
-    person.medications.forEach(med => {
-      const tier = med.tier;
+    // Prescription costs need to be factored in here as well, assuming they apply to deductible/MOOP
+     person.medications.forEach(med => {
       const refills = med.refillsPerYear || 12;
       const customCost = parseFloat(med.customCost) || null;
-      
       if (customCost) {
-        // Use custom cost provided by user
-        rxCost += customCost * refills;
-      } else if (tier <= 2 && plan.rxDeductibleWaived.includes(tier)) {
-        // Deductible waived
-        rxCost += plan.rxCopays['tier' + tier] * refills;
-      } else if (tier <= 2) {
-        rxCost += plan.rxCopays['tier' + tier] * refills;
+        totalDeductibleApplicableCharges += customCost * refills;
       } else {
-        // Tier 3+ uses coinsurance
-        rxCost += 50 * plan.rxCopays['tier' + tier] * refills; // Assuming $50 avg cost
+        // Simplified logic for tiered drugs
+        const tier = med.tier;
+        const rxCopay = plan.rxCopays['tier' + tier];
+        if (rxCopay > 1) { // It's a copay
+            totalEstimatedExemptCopays += rxCopay * refills;
+        } else { // It's coinsurance
+            // Assume an average cost for drugs with coinsurance
+            const estimatedDrugCost = 100; 
+            totalDeductibleApplicableCharges += estimatedDrugCost * refills;
+            if(coinsuranceRate === 0) coinsuranceRate = rxCopay;
+        }
       }
     });
   });
 
+  // Step A: Calculate Cost from Deductible-Applicable Charges
+  const chargesAfterDeductible = Math.max(0, totalDeductibleApplicableCharges - planDeductible);
+  const coinsurancePayment = chargesAfterDeductible * coinsuranceRate;
+  const amountPaidToDeductible = Math.min(totalDeductibleApplicableCharges, planDeductible);
+  const deductibleBasedCost = amountPaidToDeductible + coinsurancePayment;
+
+  // Step B: Calculate Total OOP (Before the MOOP Ceiling)
+  const calculatedOOP = deductibleBasedCost + totalEstimatedExemptCopays;
+
+  // Step C: Apply the MOOP Ceiling
+  const totalEstimatedOOP = Math.min(calculatedOOP, planMOOP);
+
+  const totalAnnualCost = annualPremium + totalEstimatedOOP;
+
   return {
-    premium: premiumCost,
-    visits: visitCosts,
-    medications: rxCost,
-    deductiblePaid: totalDeductiblePaid,
-    coinsurancePaid: totalCoinsurancePaid,
-    total: premiumCost + visitCosts + rxCost
+    premium: annualPremium,
+    visits: totalEstimatedOOP, // This is a simplification, combining all OOP costs
+    medications: 0, // Included in 'visits' now
+    deductiblePaid: amountPaidToDeductible,
+    coinsurancePaid: coinsurancePayment,
+    total: totalAnnualCost
   };
 }
 
@@ -169,186 +110,178 @@ export function calculatePlanCost(plan, people, costSettings = null) {
  * @param {Object} costSettings - Settings for typical costs of services
  * @returns {Object} Detailed breakdown of all costs
  */
+/**
+ * Get detailed cost breakdown with per-person calculations
+ * @param {Object} plan - The insurance plan
+ * @param {Array} people - Array of people with visits and medications
+ * @param {Object} costSettings - Settings for typical costs of services
+ * @returns {Object} Detailed breakdown of all costs
+ */
 export function getDetailedCostBreakdown(plan, people, costSettings = null) {
-  // Use default costs if not provided
   const costs = costSettings || {
     emergencyRoom: 1500,
     diagnosticTest: 300,
     imaging: 200,
     rehabilitationOutpatient: 150,
-    habilitationOutpatient: 150
+    habilitationOutpatient: 150,
   };
 
-  // Premium calculation
-  const premiumBreakdown = {
-    monthlyPremium: plan.premium,
-    monthsPerYear: 12,
-    annualPremium: plan.premium * 12
-  };
+  const annualPremium = plan.premium * 12;
 
-  // Use family deductible if more than one person
-  const medicalDeductible = people.length > 1 
-    ? plan.medicalDeductible.family 
-    : plan.medicalDeductible.person;
-  const rxDeductible = people.length > 1 
-    ? plan.rxDeductible.family 
-    : plan.rxDeductible.person;
+  const planDeductible = people.length > 1 ? plan.medicalDeductible.family : plan.medicalDeductible.person;
+  const planMOOP = people.length > 1 ? plan.outOfPocketMax.family : plan.outOfPocketMax.person;
 
-  let medicalDeductibleRemaining = medicalDeductible;
-  let rxDeductibleRemaining = rxDeductible;
-  let totalMedicalDeductiblePaid = 0;
-  let totalRxDeductiblePaid = 0;
-  let totalCoinsurancePaid = 0;
+  let totalEstimatedExemptCopays = 0;
+  let totalDeductibleApplicableCharges = 0;
+  let coinsuranceRate = 0; // Simplified
 
-  // Visit costs breakdown
-  const visitBreakdown = [];
-  let totalVisitCosts = 0;
+  const personBreakdowns = [];
 
   people.forEach(person => {
-    const personVisitCosts = {};
-    let personTotal = 0;
+    const personBreakdown = {
+      personName: person.name,
+      exemptCopays: [],
+      deductibleApplicableCharges: [],
+      totalExemptCopays: 0,
+      totalDeductibleApplicableCharges: 0,
+    };
 
-    Object.keys(person.visits).forEach(visitType => {
-      const visits = person.visits[visitType];
-      if (visits === 0) return;
+    // 1. Calculate Exempt Copays for the person
+    const exemptServices = {
+        primaryCare: { visits: person.visits.primaryCare, copay: plan.copays.primaryCare },
+        specialist: { visits: person.visits.specialist, copay: plan.copays.specialist },
+        urgentCare: { visits: person.visits.urgentCare, copay: plan.copays.urgentCare },
+        mentalHealth: { visits: person.visits.mentalHealth, copay: plan.copays.mentalHealth },
+    };
 
-      const costType = getServiceCostType(plan, visitType);
-      let totalCost = 0;
-      let calculation = '';
-      let deductibleApplied = 0;
-      let coinsuranceApplied = 0;
-      
-      // Determine service cost and whether it uses coinsurance
-      const serviceCosts = {
-        emergencyRoom: costs.emergencyRoom,
-        diagnosticTest: costs.diagnosticTest,
-        imaging: costs.imaging,
-        rehabilitationOutpatient: costs.rehabilitationOutpatient,
-        habilitationOutpatient: costs.habilitationOutpatient
-      };
-      
-      if (costType.isCoinsurance && serviceCosts[visitType]) {
-        // Service uses coinsurance - apply deductible first
-        const totalServiceCost = visits * serviceCosts[visitType];
-        const result = calculateServiceCost(
-          totalServiceCost,
-          medicalDeductibleRemaining,
-          costType.rate,
-          true
-        );
-        
-        totalCost = result.patientPays;
-        deductibleApplied = result.deductibleUsed;
-        coinsuranceApplied = result.coinsuranceAmount;
-        totalMedicalDeductiblePaid += deductibleApplied;
-        totalCoinsurancePaid += coinsuranceApplied;
-        medicalDeductibleRemaining -= deductibleApplied;
-        
-        if (deductibleApplied > 0) {
-          const afterDeductible = totalServiceCost - deductibleApplied;
-          calculation = `${visits} visits × $${serviceCosts[visitType]} = $${totalServiceCost.toFixed(2)} ($${deductibleApplied.toFixed(2)} to deductible, then $${afterDeductible.toFixed(2)} × ${(costType.rate * 100).toFixed(1)}% coinsurance = $${coinsuranceApplied.toFixed(2)})`;
-        } else {
-          calculation = `${visits} visits × $${serviceCosts[visitType]} × ${(costType.rate * 100).toFixed(1)}% coinsurance = $${totalCost.toFixed(2)}`;
+    Object.entries(exemptServices).forEach(([type, data]) => {
+        if (data.visits > 0) {
+            const cost = data.visits * data.copay;
+            personBreakdown.exemptCopays.push({
+                type: type.replace(/([A-Z])/g, ' $1').trim(),
+                calculation: `${data.visits} × $${data.copay.toFixed(2)}`,
+                cost: cost,
+            });
+            personBreakdown.totalExemptCopays += cost;
         }
-      } else {
-        // Fixed copay
-        totalCost = visits * costType.rate;
-        calculation = `${visits} visits × $${costType.rate.toFixed(2)} copay = $${totalCost.toFixed(2)}`;
-      }
-      
-      personVisitCosts[visitType] = {
-        visits,
-        costPerVisit: costType.isCoinsurance ? serviceCosts[visitType] : costType.rate,
-        totalCost,
-        deductibleApplied,
-        coinsuranceApplied,
-        calculation
-      };
-      personTotal += totalCost;
+    });
+    
+    person.medications.forEach(med => {
+        const refills = med.refillsPerYear || 12;
+        const customCost = parseFloat(med.customCost) || null;
+        if (!customCost) {
+            const tier = med.tier;
+            const rxCopay = plan.rxCopays['tier' + tier];
+            if (rxCopay > 1) { // It's a copay
+                const cost = rxCopay * refills;
+                personBreakdown.exemptCopays.push({
+                    type: `${med.name || `Tier ${tier} Rx`}`,
+                    calculation: `${refills} × $${rxCopay.toFixed(2)}`,
+                    cost: cost,
+                });
+                personBreakdown.totalExemptCopays += cost;
+            }
+        }
     });
 
-    if (Object.keys(personVisitCosts).length > 0) {
-      visitBreakdown.push({
-        personName: person.name,
-        visitCosts: personVisitCosts,
-        personTotal
-      });
-    }
-    totalVisitCosts += personTotal;
-  });
+    // 2. Calculate Deductible Applicable Charges for the person
+    const deductibleServices = [
+      { type: 'emergencyRoom', visits: person.visits.emergencyRoom, cost: costs.emergencyRoom, planRate: plan.copays.emergencyRoom },
+      { type: 'diagnosticTest', visits: person.visits.diagnosticTest, cost: costs.diagnosticTest, planRate: plan.copays.diagnosticTest },
+      { type: 'imaging', visits: person.visits.imaging, cost: costs.imaging, planRate: plan.copays.imaging },
+      { type: 'rehabilitationOutpatient', visits: person.visits.rehabilitationOutpatient, cost: costs.rehabilitationOutpatient, planRate: plan.copays.rehabilitationOutpatient },
+      { type: 'habilitationOutpatient', visits: person.visits.habilitationOutpatient, cost: costs.habilitationOutpatient, planRate: plan.copays.habilitationOutpatient },
+    ];
 
-  // Medication costs breakdown
-  const medicationBreakdown = [];
-  let totalRxCosts = 0;
-
-  people.forEach(person => {
-    const personMedCosts = [];
-    let personMedTotal = 0;
+    deductibleServices.forEach(service => {
+        if (service.visits > 0) {
+            const charge = service.visits * service.cost;
+            personBreakdown.deductibleApplicableCharges.push({
+                type: service.type.replace(/([A-Z])/g, ' $1').trim(),
+                calculation: `${service.visits} × $${service.cost.toFixed(2)}`,
+                charge: charge,
+            });
+            personBreakdown.totalDeductibleApplicableCharges += charge;
+            if (service.planRate > 0 && service.planRate < 1) {
+                coinsuranceRate = service.planRate; // Simplified: last one wins
+            }
+        }
+    });
 
     person.medications.forEach(med => {
-      const tier = med.tier;
-      const refills = med.refillsPerYear || 12;
-      const customCost = parseFloat(med.customCost) || null;
-      let costPerFill;
-      let deductibleWaived = false;
-      let calculation;
-      
-      if (customCost) {
-        // Use custom cost provided by user
-        costPerFill = customCost;
-        calculation = `${refills} refills × $${costPerFill.toFixed(2)} (custom cost) = $${(costPerFill * refills).toFixed(2)}`;
-      } else if (tier <= 2) {
-        costPerFill = plan.rxCopays['tier' + tier];
-        deductibleWaived = plan.rxDeductibleWaived.includes(tier);
-        calculation = `${refills} refills × $${costPerFill.toFixed(2)} copay = $${(costPerFill * refills).toFixed(2)}`;
-      } else {
-        // Tier 3+ uses coinsurance on assumed $50 cost
-        costPerFill = 50 * plan.rxCopays['tier' + tier];
-        calculation = `${refills} refills × ($50 × ${(plan.rxCopays['tier' + tier] * 100).toFixed(1)}%) = $${(costPerFill * refills).toFixed(2)}`;
-      }
-      
-      const totalCost = costPerFill * refills;
-      
-      personMedCosts.push({
-        medicationName: med.name || `Tier ${tier} Medication`,
-        tier,
-        refills,
-        costPerFill,
-        totalCost,
-        deductibleWaived,
-        customCost: customCost,
-        calculation
-      });
-      personMedTotal += totalCost;
+        const refills = med.refillsPerYear || 12;
+        const customCost = parseFloat(med.customCost) || null;
+        if (customCost) {
+            const charge = customCost * refills;
+            personBreakdown.deductibleApplicableCharges.push({
+                type: `${med.name || `Tier ${med.tier} Rx`}`,
+                calculation: `${refills} × $${customCost.toFixed(2)}`,
+                charge: charge,
+            });
+            personBreakdown.totalDeductibleApplicableCharges += charge;
+        } else {
+            const tier = med.tier;
+            const rxCopay = plan.rxCopays['tier' + tier];
+            if (rxCopay <= 1 && rxCopay > 0) { // It's coinsurance
+                const estimatedDrugCost = 100;
+                const charge = estimatedDrugCost * refills;
+                personBreakdown.deductibleApplicableCharges.push({
+                    type: `${med.name || `Tier ${tier} Rx`}`,
+                    calculation: `${refills} × ~$${estimatedDrugCost}`,
+                    charge: charge,
+                });
+                personBreakdown.totalDeductibleApplicableCharges += charge;
+                if (coinsuranceRate === 0) coinsuranceRate = rxCopay;
+            }
+        }
     });
+    
+    // Add the person's breakdown to the list
+    personBreakdowns.push(personBreakdown);
 
-    if (personMedCosts.length > 0) {
-      medicationBreakdown.push({
-        personName: person.name,
-        medications: personMedCosts,
-        personTotal: personMedTotal
-      });
-    }
-    totalRxCosts += personMedTotal;
+    // Add person's totals to the grand totals
+    totalEstimatedExemptCopays += personBreakdown.totalExemptCopays;
+    totalDeductibleApplicableCharges += personBreakdown.totalDeductibleApplicableCharges;
   });
+
+
+  // Step A
+  const chargesAfterDeductible = Math.max(0, totalDeductibleApplicableCharges - planDeductible);
+  const coinsurancePayment = chargesAfterDeductible * coinsuranceRate;
+  const amountPaidToDeductible = Math.min(totalDeductibleApplicableCharges, planDeductible);
+  const deductibleBasedCost = amountPaidToDeductible + coinsurancePayment;
+
+  // Step B
+  const calculatedOOP = deductibleBasedCost + totalEstimatedExemptCopays;
+
+  // Step C
+  const totalEstimatedOOP = Math.min(calculatedOOP, planMOOP);
+  const grandTotal = annualPremium + totalEstimatedOOP;
 
   return {
     planName: plan.name,
-    premiumBreakdown,
-    visitBreakdown,
-    medicationBreakdown,
+    premiumBreakdown: {
+        annualPremium: annualPremium,
+        monthlyPremium: plan.premium,
+        monthsPerYear: 12,
+    },
+    personBreakdowns, // New detailed per-person breakdown
     deductibleBreakdown: {
-      medicalDeductible,
-      medicalDeductiblePaid: totalMedicalDeductiblePaid,
-      rxDeductible,
-      rxDeductiblePaid: totalRxDeductiblePaid,
-      totalDeductiblePaid: totalMedicalDeductiblePaid + totalRxDeductiblePaid
+      medicalDeductible: planDeductible,
+      medicalDeductiblePaid: amountPaidToDeductible,
+      totalDeductibleApplicableCharges,
+      deductibleBasedCost,
     },
     coinsuranceBreakdown: {
-      totalCoinsurancePaid
+      totalCoinsurancePaid: coinsurancePayment,
+      coinsuranceRate,
     },
-    totalVisitCosts,
-    totalRxCosts,
-    grandTotal: premiumBreakdown.annualPremium + totalVisitCosts + totalRxCosts
+    oopBreakdown: {
+        totalEstimatedExemptCopays,
+        calculatedOOP,
+        planMOOP,
+        totalEstimatedOOP
+    },
+    grandTotal
   };
 }
