@@ -1654,54 +1654,54 @@ Please provide only the JSON object as your response, with accurate values extra
       {/* Disclaimer Modal */}
       {showDisclaimerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-75 dark:bg-opacity-85 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-2xl w-full transition-colors" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 sm:p-8">
-              <div className="flex items-center justify-center mb-6">
-                <div className="bg-yellow-100 dark:bg-yellow-900/30 p-4 rounded-full">
-                  <Icon name="alert-triangle" size={48} className="text-yellow-600 dark:text-yellow-500" />
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col transition-colors" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+              <div className="flex items-center justify-center mb-4">
+                <div className="bg-yellow-100 dark:bg-yellow-900/30 p-3 sm:p-4 rounded-full">
+                  <Icon name="alert-triangle" size={40} className="text-yellow-600 dark:text-yellow-500" />
                 </div>
               </div>
               
-              <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100 text-center mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-100 text-center mb-3">
                 Important Disclaimer
               </h2>
               
-              <div className="space-y-4 text-gray-700 dark:text-gray-300 text-sm sm:text-base">
-                <p className="font-semibold text-center text-lg">
+              <div className="space-y-3 text-gray-700 dark:text-gray-300 text-sm sm:text-base">
+                <p className="font-semibold text-center text-base sm:text-lg">
                   This tool is for informational and educational purposes only.
                 </p>
                 
-                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-3">
-                  <p>
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 sm:p-4 space-y-2 sm:space-y-3">
+                  <p className="text-sm sm:text-base">
                     <strong>Not Professional Advice:</strong> The information provided by this healthcare comparison tool does not constitute legal, financial, or medical advice. You should not rely on this tool as a substitute for professional advice from qualified professionals.
                   </p>
                   
-                  <p>
+                  <p className="text-sm sm:text-base">
                     <strong>No Warranty:</strong> This tool is provided "as is" without any warranty of accuracy, completeness, or fitness for a particular purpose. Healthcare costs and insurance benefits can vary significantly based on many factors not captured by this tool.
                   </p>
                   
-                  <p>
+                  <p className="text-sm sm:text-base">
                     <strong>Consult Professionals:</strong> Before making any healthcare or insurance decisions, please consult with qualified healthcare providers, insurance professionals, and financial advisors who can review your specific situation.
                   </p>
                   
-                  <p>
+                  <p className="text-sm sm:text-base">
                     <strong>Your Responsibility:</strong> You are solely responsible for verifying all information with your insurance provider and making informed decisions about your healthcare coverage.
                   </p>
                 </div>
                 
-                <p className="text-center text-sm text-gray-600 dark:text-gray-400 italic">
+                <p className="text-center text-xs sm:text-sm text-gray-600 dark:text-gray-400 italic">
                   By clicking "I Understand" below, you acknowledge that you have read and understood this disclaimer.
                 </p>
               </div>
-              
-              <div className="mt-6 flex justify-center">
-                <button
-                  onClick={acceptDisclaimer}
-                  className="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition text-lg font-semibold shadow-lg"
-                >
-                  I Understand
-                </button>
-              </div>
+            </div>
+            
+            <div className="p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 flex justify-center bg-white dark:bg-gray-800">
+              <button
+                onClick={acceptDisclaimer}
+                className="bg-indigo-600 text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg hover:bg-indigo-700 transition text-base sm:text-lg font-semibold shadow-lg"
+              >
+                I Understand
+              </button>
             </div>
           </div>
         </div>
