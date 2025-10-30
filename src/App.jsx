@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  calculatePlanCost,
-  getDetailedCostBreakdown,
+  calculatePlanCost as calculatePlanCostImpl,
+  getDetailedCostBreakdown as getDetailedCostBreakdownImpl,
   saveToLocalStorage,
   loadFromLocalStorage,
   clearAllData,
@@ -10,8 +10,10 @@ import {
   createNewPlan,
   createScenarios,
   importPeople,
+  importPlans,
   importPlanFromJSON,
   defaultPerson,
+  defaultCostSettings,
   Icon,
   ErrorBoundary,
   LLM_PROMPT,
@@ -21,6 +23,16 @@ import {
   useDarkMode,
   DarkModeToggle
 } from './healthcareCompare';
+
+// Currency formatter
+const formatCurrency = (value) => {
+  return new Intl.NumberFormat('en', {
+    currency: 'USD',
+    style: 'currency',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(value);
+};
 
 const HealthInsuranceCalculator = () => {
   // Dark mode hook
@@ -69,11 +81,32 @@ const HealthInsuranceCalculator = () => {
     }
   });
 
+  const [costSettings, setCostSettings] = useState(() => {
+    try {
+      const stored = localStorage.getItem('healthcarecompare-costsettings');
+      return stored ? JSON.parse(stored) : defaultCostSettings;
+    } catch (error) {
+      console.warn('Failed to load cost settings from localStorage:', error);
+      return defaultCostSettings;
+    }
+  });
+
   const [editingPlan, setEditingPlan] = useState(null);
   const [importPremium, setImportPremium] = useState('');
   const [importError, setImportError] = useState('');
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [pastedJson, setPastedJson] = useState('');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState(() => {
+    // Check if disclaimer has been accepted (cookie expires in 7 days)
+    const getCookie = (name) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+      return null;
+    };
+    return getCookie('disclaimerAccepted') !== 'true';
+  });
   
   // Scenarios state
   const [activeScenario, setActiveScenario] = useState('mostLikely');
@@ -90,47 +123,27 @@ const HealthInsuranceCalculator = () => {
       console.warn('Failed to load scenarios from localStorage:', error);
     }
     
-    // Default scenarios based on current people data
-    const defaultScenarios = {
-      bestCase: people.map(person => ({
-        ...person,
-        name: person.name + ' (Best Case)',
-        visits: {
-          primaryCare: Math.max(0, Math.floor(person.visits.primaryCare * 0.5)),
-          specialist: Math.max(0, Math.floor(person.visits.specialist * 0.3)),
-          urgentCare: Math.max(0, Math.floor(person.visits.urgentCare * 0.2)),
-          emergencyRoom: 0,
-          mentalHealth: Math.max(0, Math.floor(person.visits.mentalHealth * 0.7)),
-          diagnosticTest: Math.max(0, Math.floor(person.visits.diagnosticTest * 0.5)),
-          imaging: Math.max(0, Math.floor(person.visits.imaging * 0.3)),
-          rehabilitationOutpatient: Math.max(0, Math.floor(person.visits.rehabilitationOutpatient * 0.5)),
-          habilitationOutpatient: Math.max(0, Math.floor(person.visits.habilitationOutpatient * 0.5))
-        }
-      })),
-      mostLikely: [...people],
-      worstCase: people.map(person => ({
-        ...person,
-        name: person.name + ' (Worst Case)',
-        visits: {
-          primaryCare: person.visits.primaryCare + 2,
-          specialist: person.visits.specialist + 3,
-          urgentCare: person.visits.urgentCare + 1,
-          emergencyRoom: person.visits.emergencyRoom + 1,
-          mentalHealth: person.visits.mentalHealth + 2,
-          diagnosticTest: person.visits.diagnosticTest + 2,
-          imaging: person.visits.imaging + 1,
-          rehabilitationOutpatient: person.visits.rehabilitationOutpatient + 4,
-          habilitationOutpatient: person.visits.habilitationOutpatient + 2
-        }
-      }))
-    };
+    // Default scenarios - get people from localStorage or use default
+    let currentPeople;
+    try {
+      const storedPeople = localStorage.getItem('healthcarecompare-people');
+      currentPeople = storedPeople ? JSON.parse(storedPeople) : defaultPeople;
+    } catch (error) {
+      currentPeople = defaultPeople;
+    }
     
-    return defaultScenarios;
+    return createScenarios(currentPeople);
   });
 
   // Save to localStorage whenever data changes
   useEffect(() => {
     saveToLocalStorage('healthcarecompare-people', people);
+    
+    // Update "Most Likely" scenario to match current people
+    setScenarios(prev => ({
+      ...prev,
+      mostLikely: [...people]
+    }));
   }, [people]);
 
   useEffect(() => {
@@ -141,12 +154,24 @@ const HealthInsuranceCalculator = () => {
     saveToLocalStorage('healthcarecompare-scenarios', scenarios);
   }, [scenarios]);
 
+  useEffect(() => {
+    saveToLocalStorage('healthcarecompare-costsettings', costSettings);
+  }, [costSettings]);
+
   const showLLMPrompt = () => {
     setShowPromptModal(true);
   };
 
   const copyPromptToClipboard = async (event) => {
     await copyToClipboard(LLM_PROMPT, event);
+  };
+
+  const acceptDisclaimer = () => {
+    // Set cookie to expire in 7 days
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7);
+    document.cookie = `disclaimerAccepted=true; expires=${expires.toUTCString()}; path=/`;
+    setShowDisclaimerModal(false);
   };
 
   const handleJsonImport = () => {
@@ -226,6 +251,32 @@ const HealthInsuranceCalculator = () => {
     reader.readAsText(file);
   };
 
+  const importPlansData = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result);
+        const validPlans = importPlans(importedData, plans);
+
+        if (validPlans.length > 0) {
+          setPlans([...plans, ...validPlans]);
+          alert('Successfully imported ' + validPlans.length + ' plan(s)');
+        } else {
+          alert('No valid plan data found in the file');
+        }
+        
+        event.target.value = '';
+      } catch (error) {
+        alert('Invalid JSON file: ' + error.message);
+      }
+    };
+    
+    reader.readAsText(file);
+  };
+
   const handleClearAllData = () => {
     if (clearAllData()) {
       // Reset to default state
@@ -266,12 +317,7 @@ const HealthInsuranceCalculator = () => {
 
   const updatePersonName = (id, name) => {
     setPeople(people.map(p => p.id === id ? { ...p, name } : p));
-    
-    // Update scenarios to keep names in sync for most likely scenario
-    setScenarios(prev => ({
-      ...prev,
-      mostLikely: prev.mostLikely.map(p => p.id === id ? { ...p, name } : p)
-    }));
+    // Note: mostLikely scenario is automatically synced via useEffect
   };
 
   const updateScenarioPersonName = (id, name) => {
@@ -404,32 +450,12 @@ const HealthInsuranceCalculator = () => {
         bestCase: mostLikelyData.map(person => ({
           ...person,
           name: person.name.replace(' (Best Case)', '') + ' (Best Case)',
-          visits: {
-            primaryCare: Math.max(0, Math.floor(person.visits.primaryCare * 0.5)),
-            specialist: Math.max(0, Math.floor(person.visits.specialist * 0.3)),
-            urgentCare: Math.max(0, Math.floor(person.visits.urgentCare * 0.2)),
-            emergencyRoom: 0,
-            mentalHealth: Math.max(0, Math.floor(person.visits.mentalHealth * 0.7)),
-            diagnosticTest: Math.max(0, Math.floor(person.visits.diagnosticTest * 0.5)),
-            imaging: Math.max(0, Math.floor(person.visits.imaging * 0.3)),
-            rehabilitationOutpatient: Math.max(0, Math.floor(person.visits.rehabilitationOutpatient * 0.5)),
-            habilitationOutpatient: Math.max(0, Math.floor(person.visits.habilitationOutpatient * 0.5))
-          }
+          visits: { ...person.visits }
         })),
         worstCase: mostLikelyData.map(person => ({
           ...person,
           name: person.name.replace(' (Worst Case)', '') + ' (Worst Case)',
-          visits: {
-            primaryCare: person.visits.primaryCare + 2,
-            specialist: person.visits.specialist + 3,
-            urgentCare: person.visits.urgentCare + 1,
-            emergencyRoom: person.visits.emergencyRoom + 1,
-            mentalHealth: person.visits.mentalHealth + 2,
-            diagnosticTest: person.visits.diagnosticTest + 2,
-            imaging: person.visits.imaging + 1,
-            rehabilitationOutpatient: person.visits.rehabilitationOutpatient + 4,
-            habilitationOutpatient: person.visits.habilitationOutpatient + 2
-          }
+          visits: { ...person.visits }
         }))
       }));
     }
@@ -510,168 +536,34 @@ const HealthInsuranceCalculator = () => {
     }));
   };
 
+  const updateCostSetting = (field, value) => {
+    setCostSettings({
+      ...costSettings,
+      [field]: parseFloat(value) || 0
+    });
+  };
+
+  const resetCostSettings = () => {
+    setCostSettings(defaultCostSettings);
+  };
+
   const calculatePlanCost = (plan, scenarioKey = null) => {
-    // Annual premium
-    const premiumCost = plan.premium * 12;
-
-    // Medical visits - sum across all people (use specific scenario, active scenario, or regular people)
-    let visitCosts = 0;
     const scenarioPeople = scenarioKey ? scenarios[scenarioKey] : (scenariosEnabled ? scenarios[activeScenario] : people);
-    scenarioPeople.forEach(person => {
-      visitCosts += 
-        (person.visits.primaryCare * plan.copays.primaryCare) +
-        (person.visits.specialist * plan.copays.specialist) +
-        (person.visits.urgentCare * plan.copays.urgentCare) +
-        (person.visits.emergencyRoom * plan.copays.emergencyRoom) +
-        (person.visits.mentalHealth * plan.copays.mentalHealth) +
-        (person.visits.diagnosticTest * plan.copays.diagnosticTest) +
-        (person.visits.imaging * 200 * plan.copays.imaging) + // Assume $200 imaging cost
-        (person.visits.rehabilitationOutpatient * plan.copays.rehabilitationOutpatient) +
-        (person.visits.habilitationOutpatient * plan.copays.habilitationOutpatient);
-    });
-
-    // Medications
-    let rxCost = 0;
-    scenarioPeople.forEach(person => {
-      person.medications.forEach(med => {
-        const tier = med.tier;
-        const refills = med.refillsPerYear || 12;
-        const customCost = parseFloat(med.customCost) || null;
-        
-        if (customCost) {
-          // Use custom cost provided by user
-          rxCost += customCost * refills;
-        } else if (tier <= 2 && plan.rxDeductibleWaived.includes(tier)) {
-          // Deductible waived
-          rxCost += plan.rxCopays['tier' + tier] * refills;
-        } else if (tier <= 2) {
-          rxCost += plan.rxCopays['tier' + tier] * refills;
-        } else {
-          // Tier 3+ uses coinsurance
-          rxCost += 50 * plan.rxCopays['tier' + tier] * refills; // Assuming $50 avg cost
-        }
-      });
-    });
-
-    return {
-      premium: premiumCost,
-      visits: visitCosts,
-      medications: rxCost,
-      total: premiumCost + visitCosts + rxCost
-    };
+    
+    // Use imported calculation function with cost settings
+    return calculatePlanCostImpl(plan, scenarioPeople, costSettings);
   };
 
   const getDetailedCostBreakdown = (plan, scenarioKey = null) => {
     const scenarioPeople = scenarioKey ? scenarios[scenarioKey] : (scenariosEnabled ? scenarios[activeScenario] : people);
     
-    // Premium calculation
-    const premiumBreakdown = {
-      monthlyPremium: plan.premium,
-      monthsPerYear: 12,
-      annualPremium: plan.premium * 12
-    };
-
-    // Visit costs breakdown
-    const visitBreakdown = [];
-    let totalVisitCosts = 0;
-
-    scenarioPeople.forEach(person => {
-      const personVisitCosts = {};
-      let personTotal = 0;
-
-      Object.keys(person.visits).forEach(visitType => {
-        const visits = person.visits[visitType];
-        let costPerVisit = plan.copays[visitType];
-        
-        // Special case for imaging which uses coinsurance
-        if (visitType === 'imaging') {
-          costPerVisit = 200 * plan.copays.imaging; // $200 * coinsurance percentage
-        }
-        
-        const totalCost = visits * costPerVisit;
-        personVisitCosts[visitType] = {
-          visits,
-          costPerVisit,
-          totalCost,
-          calculation: visitType === 'imaging' 
-            ? `${visits} visits × $200 × ${(plan.copays.imaging * 100).toFixed(1)}% = $${totalCost.toFixed(2)}`
-            : `${visits} visits × $${costPerVisit.toFixed(2)} = $${totalCost.toFixed(2)}`
-        };
-        personTotal += totalCost;
-      });
-
-      visitBreakdown.push({
-        personName: person.name,
-        visitCosts: personVisitCosts,
-        personTotal
-      });
-      totalVisitCosts += personTotal;
-    });
-
-    // Medication costs breakdown
-    const medicationBreakdown = [];
-    let totalRxCosts = 0;
-
-    scenarioPeople.forEach(person => {
-      const personMedCosts = [];
-      let personMedTotal = 0;
-
-      person.medications.forEach(med => {
-        const tier = med.tier;
-        const refills = med.refillsPerYear || 12;
-        const customCost = parseFloat(med.customCost) || null;
-        let costPerFill;
-        let deductibleWaived = false;
-        let calculation;
-        
-        if (customCost) {
-          // Use custom cost provided by user
-          costPerFill = customCost;
-          calculation = `${refills} refills × $${costPerFill.toFixed(2)} (custom cost) = $${(costPerFill * refills).toFixed(2)}`;
-        } else if (tier <= 2) {
-          costPerFill = plan.rxCopays['tier' + tier];
-          deductibleWaived = plan.rxDeductibleWaived.includes(tier);
-          calculation = `${refills} refills × $${costPerFill.toFixed(2)} copay = $${(costPerFill * refills).toFixed(2)}`;
-        } else {
-          // Tier 3+ uses coinsurance on assumed $50 cost
-          costPerFill = 50 * plan.rxCopays['tier' + tier];
-          calculation = `${refills} refills × ($50 × ${(plan.rxCopays['tier' + tier] * 100).toFixed(1)}%) = $${(costPerFill * refills).toFixed(2)}`;
-        }
-        
-        const totalCost = costPerFill * refills;
-        
-        personMedCosts.push({
-          medicationName: med.name || `Tier ${tier} Medication`,
-          tier,
-          refills,
-          costPerFill,
-          totalCost,
-          deductibleWaived,
-          customCost: customCost,
-          calculation
-        });
-        personMedTotal += totalCost;
-      });
-
-      if (personMedCosts.length > 0) {
-        medicationBreakdown.push({
-          personName: person.name,
-          medications: personMedCosts,
-          personTotal: personMedTotal
-        });
-      }
-      totalRxCosts += personMedTotal;
-    });
-
+    // Use imported calculation function with cost settings
+    const breakdown = getDetailedCostBreakdownImpl(plan, scenarioPeople, costSettings);
+    
+    // Add scenario name for UI
     return {
-      planName: plan.name,
-      scenarioName: scenarioKey || (scenariosEnabled ? activeScenario : 'current'),
-      premiumBreakdown,
-      visitBreakdown,
-      medicationBreakdown,
-      totalVisitCosts,
-      totalRxCosts,
-      grandTotal: premiumBreakdown.annualPremium + totalVisitCosts + totalRxCosts
+      ...breakdown,
+      scenarioName: scenarioKey || (scenariosEnabled ? activeScenario : 'current')
     };
   };
 
@@ -711,15 +603,26 @@ const HealthInsuranceCalculator = () => {
                 )}
               </button>
             </div>
-            <button
-              onClick={clearAllData}
-              className="flex items-center gap-2 bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 transition text-xs sm:text-sm"
-              title="Clear all data and start over"
-            >
-              <Icon name="trash-2" size={16} />
-              <span className="hidden xs:inline">Clear All Data</span>
-              <span className="xs:hidden">Clear</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                className="flex items-center gap-2 bg-gray-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-700 transition text-xs sm:text-sm"
+                title="Configure typical costs for services"
+              >
+                <Icon name="settings" size={16} />
+                <span className="hidden xs:inline">Cost Settings</span>
+                <span className="xs:hidden">Settings</span>
+              </button>
+              <button
+                onClick={handleClearAllData}
+                className="flex items-center gap-2 bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 transition text-xs sm:text-sm"
+                title="Clear all data and start over"
+              >
+                <Icon name="trash-2" size={16} />
+                <span className="hidden xs:inline">Clear All Data</span>
+                <span className="xs:hidden">Clear</span>
+              </button>
+            </div>
           </div>
           
           {/* Second row: Centered title */}
@@ -957,6 +860,22 @@ const HealthInsuranceCalculator = () => {
                   <Icon name="download" size={16} />
                   <span className="hidden xs:inline">Export All</span>
                 </button>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={importPlansData}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    id="import-plans"
+                  />
+                  <label
+                    htmlFor="import-plans"
+                    className="flex items-center gap-1 sm:gap-2 bg-blue-600 text-white px-2 sm:px-3 py-2 rounded-lg hover:bg-blue-700 transition text-xs sm:text-sm cursor-pointer"
+                  >
+                    <Icon name="upload" size={16} />
+                    <span className="hidden xs:inline">Import</span>
+                  </label>
+                </div>
                 <button
                   onClick={showLLMPrompt}
                   className="flex items-center gap-1 sm:gap-2 bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition text-xs sm:text-sm"
@@ -1162,19 +1081,19 @@ const HealthInsuranceCalculator = () => {
                                 <span className={`font-semibold text-${scenario.color}-800`}>{scenario.label}</span>
                               </div>
                               <span className={`font-bold text-lg text-${scenario.color}-700`}>
-                                ${scenarioCosts.total.toFixed(0)}
+                                {formatCurrency(scenarioCosts.total)}
                               </span>
                             </div>
                             <div className="flex justify-between text-xs text-gray-600">
-                              <span>Premium: ${scenarioCosts.premium.toFixed(0)}</span>
-                              <span>Visits: ${scenarioCosts.visits.toFixed(0)}</span>
-                              <span>Rx: ${scenarioCosts.medications.toFixed(0)}</span>
+                              <span>Premium: {formatCurrency(scenarioCosts.premium)}</span>
+                              <span>Visits: {formatCurrency(scenarioCosts.visits)}</span>
+                              <span>Rx: {formatCurrency(scenarioCosts.medications)}</span>
                             </div>
                           </div>
                         );
                       })}
                       <div className="bg-gray-100 p-2 rounded text-center text-sm text-gray-600">
-                        Range: ${(calculatePlanCost(plan, 'worstCase').total - calculatePlanCost(plan, 'bestCase').total).toFixed(0)}
+                        Range: {formatCurrency(calculatePlanCost(plan, 'worstCase').total - calculatePlanCost(plan, 'bestCase').total)}
                       </div>
                     </div>
                   ) : (
@@ -1182,19 +1101,19 @@ const HealthInsuranceCalculator = () => {
                     <div className="space-y-3 bg-indigo-50 p-4 rounded-lg">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Annual Premium</span>
-                        <span className="font-semibold">${costs.premium.toFixed(2)}</span>
+                        <span className="font-semibold">{formatCurrency(costs.premium)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Medical Visits</span>
-                        <span className="font-semibold">${costs.visits.toFixed(2)}</span>
+                        <span className="font-semibold">{formatCurrency(costs.visits)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Medications</span>
-                        <span className="font-semibold">${costs.medications.toFixed(2)}</span>
+                        <span className="font-semibold">{formatCurrency(costs.medications)}</span>
                       </div>
                       <div className="border-t-2 border-indigo-300 pt-2 flex justify-between">
                         <span className="font-bold text-gray-800">Total Yearly Cost</span>
-                        <span className="font-bold text-2xl text-indigo-600">${costs.total.toFixed(2)}</span>
+                        <span className="font-bold text-2xl text-indigo-600">{formatCurrency(costs.total)}</span>
                       </div>
                     </div>
                   )}
@@ -1244,8 +1163,8 @@ const HealthInsuranceCalculator = () => {
                           <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">Annual Premium</h4>
                           <div className="bg-gray-50 p-2 sm:p-3 rounded">
                             <p className="text-xs sm:text-sm text-gray-600">
-                              ${breakdown.premiumBreakdown.monthlyPremium.toFixed(2)}/month × {breakdown.premiumBreakdown.monthsPerYear} months = 
-                              <span className="font-semibold"> ${breakdown.premiumBreakdown.annualPremium.toFixed(2)}</span>
+                              {formatCurrency(breakdown.premiumBreakdown.monthlyPremium)}/month × {breakdown.premiumBreakdown.monthsPerYear} months = 
+                              <span className="font-semibold"> {formatCurrency(breakdown.premiumBreakdown.annualPremium)}</span>
                             </p>
                           </div>
                         </div>
@@ -1267,7 +1186,7 @@ const HealthInsuranceCalculator = () => {
                                 )}
                                 <div className="border-t pt-1 flex justify-between font-medium">
                                   <span>Person Total:</span>
-                                  <span>${person.personTotal.toFixed(2)}</span>
+                                  <span>{formatCurrency(person.personTotal)}</span>
                                 </div>
                               </div>
                             </div>
@@ -1275,7 +1194,7 @@ const HealthInsuranceCalculator = () => {
                           <div className="bg-blue-50 p-2 rounded">
                             <div className="flex justify-between font-semibold">
                               <span>Total Medical Visits:</span>
-                              <span>${breakdown.totalVisitCosts.toFixed(2)}</span>
+                              <span>{formatCurrency(breakdown.totalVisitCosts)}</span>
                             </div>
                           </div>
                         </div>
@@ -1296,7 +1215,7 @@ const HealthInsuranceCalculator = () => {
                                   ))}
                                   <div className="border-t pt-1 flex justify-between font-medium">
                                     <span>Person Total:</span>
-                                    <span>${person.personTotal.toFixed(2)}</span>
+                                    <span>{formatCurrency(person.personTotal)}</span>
                                   </div>
                                 </div>
                               </div>
@@ -1304,7 +1223,7 @@ const HealthInsuranceCalculator = () => {
                             <div className="bg-green-50 p-2 rounded">
                               <div className="flex justify-between font-semibold">
                                 <span>Total Medications:</span>
-                                <span>${breakdown.totalRxCosts.toFixed(2)}</span>
+                                <span>{formatCurrency(breakdown.totalRxCosts)}</span>
                               </div>
                             </div>
                           </div>
@@ -1315,19 +1234,19 @@ const HealthInsuranceCalculator = () => {
                           <div className="space-y-2">
                             <div className="flex justify-between">
                               <span>Annual Premium:</span>
-                              <span>${breakdown.premiumBreakdown.annualPremium.toFixed(2)}</span>
+                              <span>{formatCurrency(breakdown.premiumBreakdown.annualPremium)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Medical Visits:</span>
-                              <span>${breakdown.totalVisitCosts.toFixed(2)}</span>
+                              <span>{formatCurrency(breakdown.totalVisitCosts)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Medications:</span>
-                              <span>${breakdown.totalRxCosts.toFixed(2)}</span>
+                              <span>{formatCurrency(breakdown.totalRxCosts)}</span>
                             </div>
                             <div className="border-t-2 border-gray-400 pt-2 flex justify-between font-bold text-lg">
                               <span>Grand Total:</span>
-                              <span>${breakdown.grandTotal.toFixed(2)}</span>
+                              <span>{formatCurrency(breakdown.grandTotal)}</span>
                             </div>
                           </div>
                         </div>
@@ -1346,8 +1265,8 @@ const HealthInsuranceCalculator = () => {
                         <h4 className="font-semibold text-gray-800 mb-2">Annual Premium</h4>
                         <div className="bg-gray-50 p-3 rounded">
                           <p className="text-sm text-gray-600">
-                            ${breakdown.premiumBreakdown.monthlyPremium.toFixed(2)}/month × {breakdown.premiumBreakdown.monthsPerYear} months = 
-                            <span className="font-semibold"> ${breakdown.premiumBreakdown.annualPremium.toFixed(2)}</span>
+                            {formatCurrency(breakdown.premiumBreakdown.monthlyPremium)}/month × {breakdown.premiumBreakdown.monthsPerYear} months = 
+                            <span className="font-semibold"> {formatCurrency(breakdown.premiumBreakdown.annualPremium)}</span>
                           </p>
                         </div>
                       </div>
@@ -1369,7 +1288,7 @@ const HealthInsuranceCalculator = () => {
                               )}
                               <div className="border-t pt-1 flex justify-between font-medium">
                                 <span>Person Total:</span>
-                                <span>${person.personTotal.toFixed(2)}</span>
+                                <span>{formatCurrency(person.personTotal)}</span>
                               </div>
                             </div>
                           </div>
@@ -1377,7 +1296,7 @@ const HealthInsuranceCalculator = () => {
                         <div className="bg-blue-50 p-2 rounded">
                           <div className="flex justify-between font-semibold">
                             <span>Total Medical Visits:</span>
-                            <span>${breakdown.totalVisitCosts.toFixed(2)}</span>
+                            <span>{formatCurrency(breakdown.totalVisitCosts)}</span>
                           </div>
                         </div>
                       </div>
@@ -1398,7 +1317,7 @@ const HealthInsuranceCalculator = () => {
                                 ))}
                                 <div className="border-t pt-1 flex justify-between font-medium">
                                   <span>Person Total:</span>
-                                  <span>${person.personTotal.toFixed(2)}</span>
+                                  <span>{formatCurrency(person.personTotal)}</span>
                                 </div>
                               </div>
                             </div>
@@ -1406,7 +1325,7 @@ const HealthInsuranceCalculator = () => {
                           <div className="bg-green-50 p-2 rounded">
                             <div className="flex justify-between font-semibold">
                               <span>Total Medications:</span>
-                              <span>${breakdown.totalRxCosts.toFixed(2)}</span>
+                              <span>{formatCurrency(breakdown.totalRxCosts)}</span>
                             </div>
                           </div>
                         </div>
@@ -1417,19 +1336,19 @@ const HealthInsuranceCalculator = () => {
                         <div className="space-y-2">
                           <div className="flex justify-between">
                             <span>Annual Premium:</span>
-                            <span>${breakdown.premiumBreakdown.annualPremium.toFixed(2)}</span>
+                            <span>{formatCurrency(breakdown.premiumBreakdown.annualPremium)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span>Medical Visits:</span>
-                            <span>${breakdown.totalVisitCosts.toFixed(2)}</span>
+                            <span>{formatCurrency(breakdown.totalVisitCosts)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span>Medications:</span>
-                            <span>${breakdown.totalRxCosts.toFixed(2)}</span>
+                            <span>{formatCurrency(breakdown.totalRxCosts)}</span>
                           </div>
                           <div className="border-t-2 border-gray-400 pt-2 flex justify-between font-bold text-lg">
                             <span>Grand Total:</span>
-                            <span>${breakdown.grandTotal.toFixed(2)}</span>
+                            <span>{formatCurrency(breakdown.grandTotal)}</span>
                           </div>
                         </div>
                       </div>
@@ -1452,6 +1371,120 @@ const HealthInsuranceCalculator = () => {
                   <li>• <strong>Deductibles:</strong> Not included in calculations (plan details show deductible amounts)</li>
                   <li>• <strong>Out-of-pocket maximums:</strong> Not applied to calculations (plan details show OOP max)</li>
                 </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cost Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center p-2 sm:p-4 z-50" onClick={() => setShowSettingsModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden transition-colors" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-600">
+              <h2 className="text-lg sm:text-2xl font-semibold text-gray-800 dark:text-gray-100">Cost Settings</h2>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition"
+              >
+                <Icon name="x" size={24} />
+              </button>
+            </div>
+            <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Configure typical costs for healthcare services that use coinsurance. These values are used to calculate how much you'll pay after meeting your deductible.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Emergency Room Visit
+                  </label>
+                  <div className="flex items-center">
+                    <span className="text-gray-500 dark:text-gray-400 mr-2">$</span>
+                    <input
+                      type="number"
+                      value={costSettings.emergencyRoom}
+                      onChange={(e) => updateCostSetting('emergencyRoom', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Diagnostic Test
+                  </label>
+                  <div className="flex items-center">
+                    <span className="text-gray-500 dark:text-gray-400 mr-2">$</span>
+                    <input
+                      type="number"
+                      value={costSettings.diagnosticTest}
+                      onChange={(e) => updateCostSetting('diagnosticTest', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Imaging (X-ray, MRI, etc.)
+                  </label>
+                  <div className="flex items-center">
+                    <span className="text-gray-500 dark:text-gray-400 mr-2">$</span>
+                    <input
+                      type="number"
+                      value={costSettings.imaging}
+                      onChange={(e) => updateCostSetting('imaging', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Rehabilitation (Outpatient)
+                  </label>
+                  <div className="flex items-center">
+                    <span className="text-gray-500 dark:text-gray-400 mr-2">$</span>
+                    <input
+                      type="number"
+                      value={costSettings.rehabilitationOutpatient}
+                      onChange={(e) => updateCostSetting('rehabilitationOutpatient', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Habilitation (Outpatient)
+                  </label>
+                  <div className="flex items-center">
+                    <span className="text-gray-500 dark:text-gray-400 mr-2">$</span>
+                    <input
+                      type="number"
+                      value={costSettings.habilitationOutpatient}
+                      onChange={(e) => updateCostSetting('habilitationOutpatient', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-between items-center">
+                <button
+                  onClick={resetCostSettings}
+                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition text-sm"
+                >
+                  Reset to Defaults
+                </button>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+                >
+                  Done
+                </button>
               </div>
             </div>
           </div>
@@ -1613,6 +1646,62 @@ Please provide only the JSON object as your response, with accurate values extra
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disclaimer Modal */}
+      {showDisclaimerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 dark:bg-opacity-85 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-2xl w-full transition-colors" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 sm:p-8">
+              <div className="flex items-center justify-center mb-6">
+                <div className="bg-yellow-100 dark:bg-yellow-900/30 p-4 rounded-full">
+                  <Icon name="alert-triangle" size={48} className="text-yellow-600 dark:text-yellow-500" />
+                </div>
+              </div>
+              
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-100 text-center mb-4">
+                Important Disclaimer
+              </h2>
+              
+              <div className="space-y-4 text-gray-700 dark:text-gray-300 text-sm sm:text-base">
+                <p className="font-semibold text-center text-lg">
+                  This tool is for informational and educational purposes only.
+                </p>
+                
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-3">
+                  <p>
+                    <strong>Not Professional Advice:</strong> The information provided by this healthcare comparison tool does not constitute legal, financial, or medical advice. You should not rely on this tool as a substitute for professional advice from qualified professionals.
+                  </p>
+                  
+                  <p>
+                    <strong>No Warranty:</strong> This tool is provided "as is" without any warranty of accuracy, completeness, or fitness for a particular purpose. Healthcare costs and insurance benefits can vary significantly based on many factors not captured by this tool.
+                  </p>
+                  
+                  <p>
+                    <strong>Consult Professionals:</strong> Before making any healthcare or insurance decisions, please consult with qualified healthcare providers, insurance professionals, and financial advisors who can review your specific situation.
+                  </p>
+                  
+                  <p>
+                    <strong>Your Responsibility:</strong> You are solely responsible for verifying all information with your insurance provider and making informed decisions about your healthcare coverage.
+                  </p>
+                </div>
+                
+                <p className="text-center text-sm text-gray-600 dark:text-gray-400 italic">
+                  By clicking "I Understand" below, you acknowledge that you have read and understood this disclaimer.
+                </p>
+              </div>
+              
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={acceptDisclaimer}
+                  className="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition text-lg font-semibold shadow-lg"
+                >
+                  I Understand
+                </button>
+              </div>
             </div>
           </div>
         </div>

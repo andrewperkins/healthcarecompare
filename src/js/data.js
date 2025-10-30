@@ -66,6 +66,36 @@ export const defaultPlan = {
 };
 
 /**
+ * Default cost settings for services
+ * These represent typical costs for services that use coinsurance
+ */
+export const defaultCostSettings = {
+  emergencyRoom: 1500,
+  diagnosticTest: 300,
+  imaging: 200,
+  rehabilitationOutpatient: 150,
+  habilitationOutpatient: 150,
+  hospitalFacility: 5000,
+  outpatientSurgeryFacility: 3000,
+  outpatientSurgeryASC: 2000,
+  physicianSurgeon: 1000,
+  childbirth: 10000,
+  skilledNursing: 500,
+  homeHealthCare: 200,
+  dme: 500,
+  hospice: 300,
+  childrenGlasses: 150
+};
+
+/**
+ * Create a new cost settings object with default values
+ * @returns {Object} New cost settings object
+ */
+export function createDefaultCostSettings() {
+  return { ...defaultCostSettings };
+}
+
+/**
  * Create a new person with default values
  * @param {number} id - Person ID
  * @param {string} name - Person name
@@ -207,4 +237,49 @@ export function importPlanFromJSON(jsonData, premium, newId) {
     childrenEyeExam: jsonData.childrenEyeExam || 0,
     ...jsonData
   };
+}
+
+/**
+ * Import plan/plans from JSON
+ * @param {Object|Array} importedData - Imported JSON data
+ * @param {Array} currentPlans - Current plans array
+ * @returns {Array} Array of valid plans to add
+ */
+export function importPlans(importedData, currentPlans) {
+  const plansToImport = Array.isArray(importedData) ? importedData : [importedData];
+  const validPlans = [];
+  
+  for (const plan of plansToImport) {
+    const requiredFields = ['name', 'medicalDeductible', 'rxDeductible', 'outOfPocketMax', 'copays', 'coinsurance', 'rxCopays'];
+    const hasRequiredFields = requiredFields.every(field => plan.hasOwnProperty(field));
+    
+    if (hasRequiredFields) {
+      const newId = Math.max(...currentPlans.map(p => p.id), 0) + validPlans.length + 1;
+      validPlans.push({
+        id: newId,
+        premium: parseFloat(plan.premium) || 0,
+        rxDeductibleWaived: plan.rxDeductibleWaived || [],
+        childrenDentalCheckup: plan.childrenDentalCheckup || 0,
+        childrenEyeExam: plan.childrenEyeExam || 0,
+        name: plan.name,
+        medicalDeductible: plan.medicalDeductible,
+        rxDeductible: plan.rxDeductible,
+        outOfPocketMax: plan.outOfPocketMax,
+        copays: {
+          ...defaultPlan.copays,
+          ...plan.copays
+        },
+        coinsurance: {
+          ...defaultPlan.coinsurance,
+          ...plan.coinsurance
+        },
+        rxCopays: {
+          ...defaultPlan.rxCopays,
+          ...plan.rxCopays
+        }
+      });
+    }
+  }
+
+  return validPlans;
 }
