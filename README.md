@@ -24,20 +24,6 @@ npm run preview
 npm run build:css
 ```
 
-The app will be available at `http://localhost:3000` (or another port if 3000 is in use).
-
-## ✨ Production Ready Features
-
-- ✅ **Pre-compiled JSX** - Vite build process, no in-browser compilation
-- ✅ **Security Headers** - CSP, X-Frame-Options via Cloudflare
-- ✅ **PWA Support** - Works offline with service worker
-- ✅ **Error Boundary** - Graceful error handling
-- ✅ **Cloudflare Pages** - Global CDN, auto-deploy, free SSL
-- ✅ **Analytics Ready** - Optional Cloudflare Web Analytics
-- ✅ **Optimized Build** - Tree-shaking, code-splitting, minification
-- ✅ **GDPR Compliant** - All data stays in browser
-- ✅ **Mobile Optimized** - Responsive, installable as PWA
-
 ## Features
 
 ### 🏥 Family Member Management
@@ -96,82 +82,6 @@ The app will be available at `http://localhost:3000` (or another port if 3000 is
 - Visit cost summaries
 - Total cost comparisons across plans
 
-## Getting Started
-
-### 🚀 Deploy to Cloudflare Pages
-
-See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for complete deployment instructions.
-
-**Quick deploy:**
-1. Sign up at [Cloudflare Pages](https://pages.cloudflare.com)
-2. Connect your GitHub repository
-3. Deploy (no build configuration needed!)
-
-Your site will be live at `https://your-project.pages.dev` with:
-- ✅ Global CDN
-- ✅ Automatic HTTPS
-- ✅ DDoS protection
-- ✅ Free unlimited bandwidth
-
-### 💻 Local Development
-1. Open `index.html` in any modern web browser
-2. Add your family members and their expected healthcare usage
-3. Add insurance plans you're considering
-4. Compare total annual costs across all plans
-
-### Adding Family Members
-1. Click "Add Person" 
-2. Enter their name
-3. Fill in expected annual visits for each type of care
-4. Add any medications with tiers and refill frequency
-
-### Adding Insurance Plans
-1. Click "Add Plan"
-2. Enter plan details manually, or
-3. Use "Add using LLM" for AI-assisted import:
-   - Copy the generated prompt
-   - Upload your plan's SBC document to an AI assistant
-   - Paste the JSON response back into the tool
-
-### Using Scenarios
-1. Click "Enable Scenarios"
-2. Switch between Best Case, Most Likely, and Worst Case
-3. Adjust healthcare usage for each scenario
-4. Compare plan costs across all scenarios
-
-## Technical Details
-
-### Built With
-- **React 18**: Modern UI framework
-- **Tailwind CSS**: Utility-first styling
-- **Lucide Icons**: Beautiful iconography
-- **Local Storage API**: Browser-based data persistence
-- **Vanilla JavaScript**: No build process required
-
-### Browser Support
-- Chrome 80+
-- Firefox 75+
-- Safari 13+
-- Edge 80+
-
-### File Structure
-```
-healthcarecompare/
-├── assets/
-│   ├── icons/          # Favicons, PWA icons
-│   └── images/         # Social media images
-├── docs/               # Documentation
-│   ├── DEPLOYMENT.md   # Deployment guide
-│   ├── CONTRIBUTING.md # Contribution guidelines
-│   └── STRUCTURE.md    # Project structure details
-├── .github/            # GitHub Actions workflows
-├── index.html          # Main application
-├── sw.js              # Service worker (PWA)
-├── site.webmanifest   # PWA manifest
-└── config files       # netlify.toml, vercel.json, etc.
-```
-
-See **[docs/STRUCTURE.md](docs/STRUCTURE.md)** for detailed structure documentation.
 
 ## Data Privacy
 
@@ -181,35 +91,6 @@ See **[docs/STRUCTURE.md](docs/STRUCTURE.md)** for detailed structure documentat
 - **No Tracking**: No analytics or tracking scripts (optional Plausible available)
 - **GDPR Compliant**: No cookies, no personal data collection
 - **Open Source**: Fully auditable code
-
-## Production Deployment
-
-This app is production-ready out of the box! See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for:
-
-- 🔒 Security configuration
-- 📊 Analytics setup (optional)
-- 🌐 Custom domain configuration
-- 🎯 Performance optimization
-- 📱 PWA installation
-- 🐛 Troubleshooting guide
-
-### Security Features
-
-- **Content Security Policy** - Prevents XSS attacks
-- **Security Headers** - X-Frame-Options, X-Content-Type-Options, etc.
-- **HTTPS Only** - Cloudflare provides automatic HTTPS
-- **No External Dependencies** - All code runs in your browser
-- **Service Worker** - Secure offline functionality
-
-### Cloudflare Pages Deployment
-
-Pre-configured for Cloudflare Pages via `wrangler.toml`:
-- ✅ Security headers configured
-- ✅ Cache rules optimized
-- ✅ No build process required
-- ✅ Automatic deployments on git push
-- ✅ Free SSL certificates
-- ✅ Global CDN distribution
 
 ## Cost Calculation Details
 
@@ -234,10 +115,6 @@ Pre-configured for Cloudflare Pages via `wrangler.toml`:
 ## Contributing
 
 We welcome contributions! See **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)** for guidelines.
-
-## License
-
-Open source - feel free to use, modify, and distribute.
 
 ---
 
