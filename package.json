@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "npm run build:css && vite build",
     "preview": "vite preview",
-    "build:css": "npx @tailwindcss/cli -i ./src/pre_tailwind_cli.styles.css -o ./src/styles.css --minify"
+    "build:css": "npx @tailwindcss/cli -i ./pre_tailwind_cli.styles.css -o ./styles.css --minify"
   },
   "repository": {
     "type": "git",

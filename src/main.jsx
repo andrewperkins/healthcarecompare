@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { initializeDarkMode } from './healthcareCompare';
-import './styles.css';
+import '../styles.css';
 
 // Set canonical URL and Open Graph URL dynamically
 if (typeof window !== 'undefined') {
